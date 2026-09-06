@@ -1,17 +1,20 @@
 // All authored content and tuning live here. No personal biographies are invented.
 export const SETTINGS = {
   title: 'Обычный день Альберта', titleLines: ['ОБЫЧНЫЙ ДЕНЬ', 'АЛЬБЕРТА'], sessionSeconds: 180,
-  firstEventAt: 7, firstSadAt: 21, eventInterval: 34, minimumInterval: 22,
+  firstEventAt: 10, firstSadAt: 28, eventInterval: 34, minimumInterval: 22,
   maxEvents: 3, repairSeconds: 3, secretSeconds: 7, happySeconds: 10,
   walkSpeed: 182, runMultiplier: 1.52, followerSpeed: 248,
   interactionRadius: 83, initialMood: 76, decayPerProblem: 0.22,
   firstInstrumentAt: 3, instrumentSeconds: 11, instrumentBreak: 5,
+  staggerArrivals:true, firstArrivalAt:2, arrivalInterval:4,
+  socialInterval:19, socialCooldown:45, queueCompanions:3,
+  danceSeconds:8, danceInterval:32, ambientInterval:12,
 };
 export const WORLD = {
   width: 1536, height: 1024,
   spawn: { x: 1100, y: 905 },
   // Only the visible studio exists. There is no secret-room map or camera target.
-  curtain: { x: 195, y: 747, exit: { x: 257, y: 778 }, zone: {x:120,y:620,w:180,h:275} },
+  curtain: { x: 195, y: 747, exit: { x: 230, y: 655 }, zone: {x:120,y:620,w:180,h:275} },
   platform: { x: 373, y: 600, w: 478, h: 326, elevation: 9 },
   floor: [{x:112,y:130},{x:1390,y:130},{x:1430,y:925},{x:1148,y:925},{x:1140,y:976},{x:1064,y:976},{x:1054,y:925},{x:102,y:925}],
   obstacles: [
@@ -55,9 +58,12 @@ export const OBJECTS = [
 // Ambient behaviour, not biographies or character-specific quests.
 export const INSTRUMENTS = [
   {id:'synth',name:'синтезаторе',x:605,y:384,direction:'up',pose:'keys'},
-  {id:'guitar',name:'гитаре',x:1110,y:585,direction:'down',pose:'guitar'},
+  {id:'guitar-left',name:'гитаре',x:316,y:644,direction:'down',pose:'guitar'},
+  {id:'guitar-right',name:'гитаре',x:901,y:742,direction:'down',pose:'guitar'},
   {id:'drums',name:'барабанах',x:620,y:872,direction:'up',pose:'drums'},
 ];
+export const SOCIAL_ORDER=['samat','loik','sveta','vovan','katya','tema'];
+export const LOUNGE_GUESTS=[{id:'guest-a',x:295,y:255,frame:0,phase:0},{id:'guest-b',x:414,y:255,frame:2,phase:3.5}];
 export const DIALOGUES = {
   greeting: 'Всё спокойно. Пока можно просто освоиться.',
   microphone: 'Микрофон молчит. Проверю кабель, усилитель и пульт.',

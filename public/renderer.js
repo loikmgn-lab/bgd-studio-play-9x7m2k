@@ -1,4 +1,4 @@
-import { WORLD } from './content.js';
+import { WORLD, LOUNGE_GUESTS } from './content.js';
 import { MotionAtlas } from './motion.js';
 const frames={down:0,right:1,up:2,left:3};
 const boxes=[
@@ -39,6 +39,7 @@ export function detectFrames(atlas,rows){
 export class Renderer {
   constructor(canvas,background,atlas){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.background=background;this.atlas=atlas;this.motion=new MotionAtlas(atlas,boxes);this.view={scale:1,x:0,y:0};this.debug=false;}
   addCrew(atlas){const frameBoxes=detectFrames(atlas,5);this.crew={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
+  addLounge(atlas){this.lounge={atlas,boxes:detectFrames(atlas,1)};}
   portrait(canvas,person){
     const source=person?.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes},row=person?.atlasRow||0,b=source.boxes[row][0],c=canvas.getContext('2d');
     c.clearRect(0,0,canvas.width,canvas.height);c.drawImage(source.atlas,b.x+b.w*.15,b.y,b.w*.7,b.h*.31,0,0,canvas.width,canvas.height);
@@ -55,16 +56,22 @@ export class Renderer {
       const g=c.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,`rgba(${color},${pulse})`);g.addColorStop(1,`rgba(${color},0)`);c.fillStyle=g;c.fillRect(x-r,y-r,r*2,r*2);
     }c.globalCompositeOperation='source-over';
     if(game.player) {
+      if(this.lounge)for(const guest of LOUNGE_GUESTS){const sip=(time+guest.phase)%9>6;drawFrame(c,this.lounge.atlas,0,['down','right','up','left'][guest.frame+Number(sip)],guest.x,guest.y,123,this.lounge.boxes);}
       const entities=[{body:game.player,row:0,player:true},...game.npcs.filter(n=>n.visible).map(n=>({body:n,row:n.atlasRow,player:false}))];
       entities.sort((a,b)=>a.body.y-b.body.y);for(const item of entities)this.character(item,time,game);
       for(const target of game.targets()){
-        if(target.id==='loik')this.marker(game.npc.x,game.npc.y-140,'sad',time);
+        if(target.event?.type==='comfort'&&target.event.phase==='new'){this.marker(target.x,target.y-140,'sad',time);}
         else{const point=target.marker||target;this.marker(point.x,point.y,target.id==='curtain'?'arrow':target.icon,time);}
       }
-      const social=game.events.find(e=>e.type==='comfort');
-      if(social?.phase==='waiting'){this.smoke(time,game.settings.secretSeconds-(social.returnAt-game.elapsed));this.marker(146,715,'wait',time,(social.returnAt-game.elapsed)/game.settings.secretSeconds);}
-      if(game.npc.state==='happy')this.marker(game.npc.x,game.npc.y-140,'happy',time);
-      if(game.npc.state==='following_albert')this.marker(game.npc.x,game.npc.y-140,'follow',time);
+      const occupant=game.roomOccupant;
+      if(occupant){this.smoke(time,time-occupant.enteredAt);this.marker(146,715,'wait',time,(occupant.returnAt-time)/game.settings.secretSeconds);}
+      let queueSpoke=false;
+      for(const npc of game.npcs.filter(n=>n.visible)){
+        if(npc.state==='happy')this.marker(npc.x,npc.y-140,'happy',time);
+        if(['following_albert','following_queue'].includes(npc.state))this.marker(npc.x,npc.y-140,'follow',time);
+        if(npc.state==='waiting_in_line')this.marker(npc.x,npc.y-140,String(game.roomQueue.findIndex(t=>t.npcId===npc.id)+1),time);
+        if(npc.bubble&&npc.bubble.until>time){if(npc.state!=='waiting_in_line'||!queueSpoke)this.speech(npc,npc.bubble.text,npc.state==='hysterical');if(npc.state==='waiting_in_line')queueSpoke=true;}
+      }
     }
     if(this.debug)this.drawDebug();
   }
@@ -81,6 +88,10 @@ export class Renderer {
     if(player&&game.repair){c.translate(Math.sin(time*22)*1.5,0);c.rotate(Math.sin(time*9)*.016);}
     const pose=body.moving?'walk':instrument?.pose||(player&&game.repair?'keys':null);
     const source=body.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes,motion:this.motion};
+    if(['hysterical','dancing'].includes(body.state)){
+      const dancing=body.state==='dancing';c.translate(0,-35);c.rotate(dancing?time*4:Math.PI/2+Math.sin(time*5)*.65);c.translate(0,53);
+      source.motion.draw(c,row,0,'walk',time*(dancing?17:23),110);c.restore();return;
+    }
     if(pose)source.motion.draw(c,row,frames[body.direction],pose,body.moving?body.step:time*9,height);
     else drawFrame(c,source.atlas,row,body.direction,0,0,height,source.boxes);
     if(instrument)this.playing(instrument,time);
@@ -105,6 +116,12 @@ export class Renderer {
     c.font='18px Arial';c.textAlign='center';c.fillStyle='#efd18e';
     for(let i=0;i<3;i++){const t=(time*.65+i/3)%1;c.globalAlpha=Math.sin(t*Math.PI)*.8;c.fillText(i%2?'♫':'♪',27+Math.sin(t*5+i)*12,-128-t*39);}
     c.globalAlpha=1;
+  }
+  speech(npc,text,loud=false){
+    const c=this.ctx;c.save();c.font=`${loud?'bold ':''}14px Arial`;const lines=[];let line='';
+    for(const word of text.split(' ')){const next=line?line+' '+word:word;if(c.measureText(next).width>230&&line){lines.push(line);line=word;}else line=next;}if(line)lines.push(line);
+    const queued=npc.state==='waiting_in_line',w=Math.min(260,Math.max(...lines.map(s=>c.measureText(s).width))+24),h=lines.length*18+18,x=Math.max(85,Math.min(WORLD.width-w-85,queued?npc.x+100:npc.x-w/2)),y=Math.max(100,npc.y-(loud?100:queued?190:163)-h);
+    c.fillStyle=loud?'#ffe0c8f2':'#eee1cdec';c.strokeStyle=loud?'#e88459':'#796351';c.lineWidth=1.5;c.beginPath();c.roundRect(x,y,w,h,9);c.fill();c.stroke();c.fillStyle='#302721';c.textAlign='left';lines.forEach((s,i)=>c.fillText(s,x+12,y+22+i*18));c.restore();
   }
   smoke(time,age){
     const c=this.ctx;c.save();

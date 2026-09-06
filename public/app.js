@@ -32,6 +32,7 @@ joy.addEventListener('pointermove',e=>{if(e.pointerId===pointer)drag(e);});
 for(const name of ['pointerup','pointercancel','lostpointercapture'])joy.addEventListener(name,()=>{pointer=null;stick={x:0,y:0};$('stick').style.transform='';});
 function portrait(canvas,row,headOnly=false){const c=canvas.getContext('2d');c.clearRect(0,0,canvas.width,canvas.height);if(headOnly){const sy=row?501:7;c.drawImage(atlas,143,sy,138,156,0,0,canvas.width,canvas.height);}else drawFrame(c,atlas,row,'down',192,507,494);}
 function updateUI(){
+  if(game.paused||game.mode==='finished')sound.stopSpeech();
   if(shownMode!==game.mode){shownMode=game.mode;$('start-screen').hidden=game.mode!=='start';$('end-screen').hidden=game.mode!=='finished';$('hud').hidden=game.mode!=='playing';$('pause').hidden=game.mode!=='playing';$('touch-controls').hidden=game.mode!=='playing';
     if(game.mode==='finished'){
       $('rank').textContent=game.stats.repairs+game.stats.people>0?'Альберт всё разрулил':'Первая смена — знакомство с BGD';
@@ -58,8 +59,9 @@ function frame(t){const dt=last?Math.min((t-last)/1000,.05):0;last=t;
   if(t-lastUi>70){updateUI();lastUi=t;}requestAnimationFrame(frame);
 }
 try {
-  const [background,characters,crew]=await Promise.all([loadImage('./assets/studio.png'),loadImage('./assets/characters-key.png'),loadImage('./assets/crew-key.png')]);
+  const [background,characters,crew,lounge]=await Promise.all([loadImage('./assets/studio.png'),loadImage('./assets/characters-key.png'),loadImage('./assets/crew-key.png'),loadImage('./assets/lounge-key.png')]);
   atlas=keyedAtlas(characters);renderer=new Renderer($('world'),background,atlas);renderer.addCrew(keyedAtlas(crew));new ResizeObserver(()=>renderer.resize()).observe($('stage'));renderer.resize();portrait($('portrait'),0);
+  renderer.addLounge(keyedAtlas(lounge));
   $('start').disabled=false;$('start').querySelector('span').textContent='НАЧАТЬ СМЕНУ';requestAnimationFrame(frame);
   // Opt-in diagnostics only. Normal players cannot accidentally teleport or shorten a shift.
   if(new URLSearchParams(location.search).get('debug')==='1')window.__bgd={game,renderer,updateUI};

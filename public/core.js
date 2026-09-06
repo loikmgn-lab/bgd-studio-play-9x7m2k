@@ -1,4 +1,5 @@
-import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS} from './content.js';
+import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER} from './content.js';
+import {BANTER} from './banter.js';
 export const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 export function atCurtain(body) {const z=WORLD.curtain.zone;return body.x>=z.x&&body.x<=z.x+z.w&&body.y>=z.y&&body.y<=z.y+z.h;}
@@ -72,176 +73,277 @@ function direction(body,dx,dy) {
   body.direction=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
 }
 export class Game {
-  constructor(settings={},random=Math.random) { this.settings={...SETTINGS,...settings};this.random=random;this.mode='start';this.signals=[]; }
-  start() {
-    this.player={...WORLD.spawn,radius:12,direction:'up',moving:false,step:0,gesture:0};
-    this.npcs=CHARACTERS.filter(n=>n.active).map((n,i)=>({...n.spawn,id:n.id,name:n.name,atlasKey:n.atlasKey||'original',atlasRow:n.atlasRow,radius:12,direction:'down',moving:false,step:0,state:'idle',visible:true,path:[],repath:0,wanderAt:10+i*3,wanderIndex:i,instrument:null,instrumentIndex:i,instrumentAt:this.settings.firstInstrumentAt+i*2}));
-    this.npc=this.npcs.find(n=>n.id==='loik'); // Stable alias for the existing authored escort event.
-    this.events=[];this.elapsed=0;this.mood=this.settings.initialMood;this.maxMood=this.mood;
+  constructor(settings={},random=Math.random){this.settings={...SETTINGS,...settings};this.random=random;this.mode='start';this.signals=[];}
+  start(){
+    this.player={...WORLD.spawn,radius:12,direction:'up',moving:false,step:0,gesture:0,instrument:null};
+    this.npcs=CHARACTERS.filter(n=>n.active).map((n,i)=>({
+      ...n.spawn,id:n.id,name:n.name,home:{...n.spawn},atlasKey:n.atlasKey||'original',atlasRow:n.atlasRow,
+      radius:12,direction:'down',moving:false,step:0,state:this.settings.staggerArrivals?'dormant':'idle',
+      visible:!this.settings.staggerArrivals,path:[],repath:0,wanderAt:10+i*3,wanderIndex:i,
+      instrument:null,instrumentIndex:i,instrumentAt:this.settings.firstInstrumentAt+i*2,
+      arrivalAt:this.settings.firstArrivalAt+i*this.settings.arrivalInterval,
+      danceAt:24,danceUntil:0,socialAfter:0,bubble:null,shoutAt:0,
+    }));
+    this.npc=this.npcs.find(n=>n.id==='loik');
+    this.events=[];this.eventSerial=0;this.roomQueue=[];this.roomOccupant=null;this.roomNextAt=0;this.groupSerial=0;
+    this.elapsed=0;this.mood=this.settings.initialMood;this.maxMood=this.mood;
     this.stats={repairs:0,people:0,rehearsals:0,secretVisits:0};this.dialogue=null;this.repair=null;this.item=null;
-    this.nextTechnical=this.settings.firstEventAt;this.nextSocial=this.settings.firstSadAt;
-    this.mode='playing';this.paused=false;this.toast={text:'Ты — Альберт. Осмотрись: первая проблема появится скоро.',until:6};this.signals=['start'];
+    this.nextTechnical=this.settings.firstEventAt;this.nextSocial=this.settings.firstSadAt;this.socialCursor=0;
+    this.nextAmbient=this.settings.ambientInterval;this.lastLines=new Map();
+    this.mode='playing';this.paused=false;this.toast={text:'Студия открыта. Сейчас начнут подтягиваться друзья.',until:5};this.signals=['start'];
   }
-  say(speaker,text,after=null) { this.dialogue={speaker,text,after}; }
-  closeDialogue() { const after=this.dialogue?.after;this.dialogue=null;after?.(); }
-  notice(text) { this.toast={text,until:this.elapsed+4}; }
-  spawnEvent(type) {
-    if(this.events.length>=this.settings.maxEvents||this.events.some(e=>e.type===type))return false;
-    if(type==='comfort'&&!['idle','walking','going_to_instrument','playing_instrument'].includes(this.npc.state))return false;
-    const spec=EVENT_TYPES[type];
-    const event={type,kind:spec.kind,phase:'new',born:this.elapsed,checked:[]};
+  person(id){return this.npcs.find(n=>n.id===id);}
+  pick(key,id){
+    const list=key==='greeting'?(BANTER.greeting[id]||BANTER.arrival):BANTER[key];
+    if(!list?.length)return DIALOGUES[key]||'Всё будет норм.';
+    const token=key+'/'+(id||''),last=this.lastLines.get(token);let index=Math.floor(this.random()*list.length);
+    if(index===last&&list.length>1)index=(index+1)%list.length;
+    this.lastLines.set(token,index);return list[index];
+  }
+  bubble(npc,text,duration=3.6){npc.bubble={text,until:this.elapsed+duration};}
+  say(speaker,text,after=null){this.dialogue={speaker,text,after};}
+  closeDialogue(){const after=this.dialogue?.after;this.dialogue=null;after?.();}
+  notice(text){this.toast={text,until:this.elapsed+4};}
+  socialEvent(id){return this.events.find(e=>e.type==='comfort'&&e.npcId===id);}
+  canNeedRoom(npc){
+    return npc?.visible&&['idle','walking','going_to_instrument','playing_instrument','dancing'].includes(npc.state)
+      &&this.elapsed>=npc.socialAfter&&!this.socialEvent(npc.id)&&!this.roomQueue.some(t=>t.npcId===npc.id)&&this.roomOccupant?.npcId!==npc.id;
+  }
+  spawnEvent(type,npcId=EVENT_TYPES.comfort.npcId){
+    if(this.events.length>=this.settings.maxEvents)return false;
+    if(type==='microphone'&&this.events.some(e=>e.type===type))return false;
+    if(type==='comfort'&&(this.events.filter(e=>e.type===type).length>=2||!this.canNeedRoom(this.person(npcId))))return false;
+    const spec=EVENT_TYPES[type],event={id:++this.eventSerial,type,kind:spec.kind,phase:'new',born:this.elapsed,checked:[]};
     if(type==='microphone')event.cause=spec.checks[Math.floor(this.random()*spec.checks.length)];
-    else {this.npc.state='sad';this.npc.path=[];this.npc.moving=false;this.npc.instrument=null;}
+    else{
+      event.npcId=npcId;const npc=this.person(npcId);
+      Object.assign(npc,{state:npcId==='samat'?'hysterical':'sad',path:[],moving:false,instrument:null,shoutAt:this.elapsed});
+      if(npcId!=='samat')this.bubble(npc,this.pick('sad'));
+    }
     this.events.push(event);this.signals.push('problem');return true;
   }
-  targets() {
+  spawnNextSocial(){
+    for(let i=0;i<SOCIAL_ORDER.length;i++){
+      const index=(this.socialCursor+i)%SOCIAL_ORDER.length,id=SOCIAL_ORDER[index];
+      if(this.spawnEvent('comfort',id)){this.socialCursor=(index+1)%SOCIAL_ORDER.length;return true;}
+    }return false;
+  }
+  targets(){
     const result=[];
-    for(const e of this.events) {
-      if(e.type==='microphone') {
+    for(const e of this.events){
+      if(e.type==='microphone'){
         const ids=e.phase==='new'?['microphone']:EVENT_TYPES.microphone.checks.filter(id=>!e.checked.includes(id));
         for(const id of ids)result.push({...OBJECTS.find(o=>o.id===id),event:e,action:e.phase==='new'?'Проверить микрофон':'Проверить: '+OBJECTS.find(o=>o.id===id).name.toLowerCase()});
-      } else if(e.phase==='new') result.push({id:'loik',...this.npc,event:e,action:'Поговорить с Лоиком'});
-      else if(e.phase==='following')result.push({...OBJECTS.find(o=>o.id==='curtain'),event:e,action:'Проводить за шторку'});
-    }
-    return result;
+      }else if(e.phase==='new'){
+        const npc=this.person(e.npcId);result.push({...npc,event:e,action:npc.id==='samat'?'Помочь Самату':'Поговорить · '+npc.name});
+      }else if(e.phase==='following')result.push({...OBJECTS.find(o=>o.id==='curtain'),event:e,action:'Проводить очередь за шторку'});
+    }return result;
   }
-  nearestTarget() {
+  nearestTarget(){
     const escort=this.events.find(e=>e.type==='comfort'&&e.phase==='following');
-    if(escort&&atCurtain(this.player))return {...OBJECTS.find(o=>o.id==='curtain'),event:escort,action:'Проводить за шторку'};
-    const targets=this.targets().filter(t=>distance(t,this.player)<this.settings.interactionRadius);
-    targets.sort((a,b)=>distance(a,this.player)-distance(b,this.player));
+    if(escort&&atCurtain(this.player))return {...OBJECTS.find(o=>o.id==='curtain'),event:escort,action:'Проводить очередь за шторку'};
+    const targets=this.targets().filter(t=>distance(t,this.player)<this.settings.interactionRadius).sort((a,b)=>distance(a,this.player)-distance(b,this.player));
     if(targets.length)return targets[0];
-    const nearby=this.npcs.filter(n=>n.visible&&distance(n,this.player)<70).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
+    const nearby=this.npcs.filter(n=>n.visible&&!['arriving','dormant'].includes(n.state)&&distance(n,this.player)<70).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
     if(nearby)return {...nearby,action:'Поговорить · '+nearby.name};
     const instrument=INSTRUMENTS.find(i=>distance(i,this.player)<65&&!this.npcs.some(n=>n.instrument?.id===i.id)&&lineClear(this.player,i));
-    if(instrument)return {...instrument,id:'play-instrument',instrument,action:this.player.instrument?'Закончить играть':'Сыграть на '+instrument.name};
+    if(instrument)return {...instrument,id:'play-instrument',instrument,action:'Сыграть на '+instrument.name};
     return null;
   }
-  interact() {
+  beginEscort(event){
+    if(event.phase!=='new')return;
+    const npc=this.person(event.npcId),companions=this.npcs.filter(n=>n!==npc&&this.canNeedRoom(n)&&n.state!=='dancing').slice(0,this.settings.queueCompanions);
+    const groupId=++this.groupSerial;event.phase='following';event.groupId=groupId;this.player.instrument=null;
+    [npc,...companions].forEach((n,index)=>{
+      Object.assign(n,{state:index?'following_queue':'following_albert',moving:false,instrument:null,path:[],repath:0,groupId,bubble:null});
+      this.roomQueue.push({npcId:n.id,eventId:index?null:event.id,groupId,activated:false});
+      if(index)this.bubble(n,this.pick('joined'),3.4+index*.3);
+    });
+    this.signals.push({type:'stop-speech'});
+    this.notice(companions.length?'Доведи компанию до шторки. Все зайдут по очереди.':'Доведи '+npc.name+' до шторки — дальше автоматически.');
+  }
+  interact(){
     if(this.mode!=='playing'||this.paused)return;
     if(this.dialogue){this.closeDialogue();return;}
     if(this.repair)return;
     if(this.player.instrument){this.player.instrument=null;return;}
-    const t=this.nearestTarget();if(!t)return;
-    this.player.gesture=0.45;
-    const event=t.event;
-    if(this.npcs.some(n=>n.id===t.id)) {
-      const person=this.npcs.find(n=>n.id===t.id);
-      if(event?.phase==='new')this.say('Лоик',DIALOGUES.sad,()=>{event.phase='following';this.npc.state='following_albert';this.npc.repath=0;this.player.instrument=null;this.notice('Доведи Лоика до шторки слева внизу — он зайдёт сам.');});
-      else this.say(person.name,person.state==='happy'?DIALOGUES.happy:person.state==='following_albert'?DIALOGUES.follow:person.state==='playing_instrument'?'Пока всё звучит.':DIALOGUES.greeting);
-    } else if(t.id==='curtain') {
-      event.entryRequested=true;
-      if(distance(this.npc,WORLD.curtain)<75)this.enterCurtain(event);
-      else this.notice('Лоик подходит и зайдёт сам. Повторно нажимать E не нужно.');
-    } else if(t.id==='play-instrument') {
-      this.player.instrument=this.player.instrument?null:t.instrument;
-      if(this.player.instrument){Object.assign(this.player,{x:t.x,y:t.y,direction:t.instrument.direction});this.player.moving=false;}
-    } else if(t.id==='microphone'&&event.phase==='new') {
-      this.say('Альберт',DIALOGUES.microphone,()=>{event.phase='checking';});
-    } else if(event?.phase==='checking') {
-      this.repair={event,objectId:t.id,elapsed:0,duration:this.settings.repairSeconds};
-      this.player.instrument=null;
-      this.player.direction=t.id==='amplifier'?'right':'up';
+    const target=this.nearestTarget();if(!target)return;this.player.gesture=.45;const event=target.event;
+    const npc=this.person(target.id);
+    if(npc){
+      if(event?.phase==='new')this.say(npc.name,this.pick(npc.id==='samat'?'samatSad':'sad'),()=>this.beginEscort(event));
+      else{
+        const category=npc.state==='happy'?'happy':npc.state==='waiting_in_line'?'queue':['following_queue','following_albert'].includes(npc.state)?'follow':npc.state==='playing_instrument'?'playing':npc.state==='dancing'?'dance':'greeting';
+        this.say(npc.name,this.pick(category,npc.id));
+      }
+    }else if(target.id==='curtain'){
+      for(const ticket of this.roomQueue)if(ticket.groupId===event.groupId)ticket.activated=true;
+      this.notice('Очередь принята. Повторно нажимать E не нужно.');
+    }else if(target.id==='play-instrument'){
+      this.player.instrument=target.instrument;Object.assign(this.player,{x:target.x,y:target.y,direction:target.instrument.direction,moving:false});
+    }else if(target.id==='microphone'&&event.phase==='new'){
+      this.say('Альберт',this.pick('microphone'),()=>{event.phase='checking';});
+    }else if(event?.phase==='checking'){
+      this.repair={event,objectId:target.id,elapsed:0,duration:this.settings.repairSeconds};this.player.instrument=null;this.player.direction=target.id==='amplifier'?'right':'up';
     }
   }
-  enterCurtain(event) {
-    if(event.phase!=='following')return;
-    event.phase='waiting';event.returnAt=this.elapsed+this.settings.secretSeconds;
-    Object.assign(this.npc,{state:'waiting',visible:false,moving:false,path:[],instrument:null});
-    this.notice('Скоро вернётся. Пока можно заняться аппаратурой.');
+  queuePosition(index){return {x:195+Math.min(index,5)*42,y:747+Math.max(0,index-1)*21};}
+  enterCurtain(event){
+    // Compatibility entry point: enqueue once; the global room controller enforces exclusivity.
+    if(event.phase==='new')this.beginEscort(event);
+    for(const ticket of this.roomQueue)if(ticket.groupId===event.groupId)ticket.activated=true;
+    this.updateRoom();
   }
-  solve(event) {
+  rewardVisit(npc){
+    this.stats.people++;this.stats.secretVisits++;
+    this.mood=clamp(this.mood+EVENT_TYPES.comfort.reward,0,100);this.maxMood=Math.max(this.maxMood,this.mood);
+    const line=this.pick('happy',npc.id);this.bubble(npc,line);this.notice(npc.name+': «'+line+'»');
+    this.signals.push('return');
+  }
+  solve(event){
+    if(!this.events.includes(event))return;
     this.events=this.events.filter(e=>e!==event);
-    this.mood=clamp(this.mood+EVENT_TYPES[event.type].reward,0,100);this.maxMood=Math.max(this.maxMood,this.mood);
-    if(event.kind==='technical'){this.stats.repairs++;this.stats.rehearsals++;this.notice(DIALOGUES.fixed);this.nextTechnical=Math.max(this.nextTechnical,this.elapsed+12);}
-    else{this.stats.people++;this.stats.secretVisits++;this.notice('Лоик: «'+DIALOGUES.happy+'»');this.nextSocial=this.elapsed+36;}
-    this.signals.push(event.kind==='technical'?'solved':'return');
+    if(event.kind==='technical'){
+      this.stats.repairs++;this.stats.rehearsals++;this.mood=clamp(this.mood+EVENT_TYPES[event.type].reward,0,100);this.maxMood=Math.max(this.maxMood,this.mood);
+      this.notice(this.pick('fixed'));this.nextTechnical=Math.max(this.nextTechnical,this.elapsed+12);this.signals.push('solved');
+    }else this.rewardVisit(this.person(event.npcId));
   }
-  togglePause() {if(this.mode==='playing')this.paused=!this.paused;}
-  finish() {this.mode='finished';this.dialogue=null;this.repair=null;this.player.moving=false;for(const npc of this.npcs)npc.moving=false;}
-  update(dt,input={x:0,y:0,run:false}) {
+  updateRoom(){
+    if(this.roomOccupant&&this.elapsed>=this.roomOccupant.returnAt){
+      const ticket=this.roomOccupant,npc=this.person(ticket.npcId);
+      Object.assign(npc,{...WORLD.curtain.exit,visible:true,state:'happy',direction:'right',moving:false,path:[],instrument:null,happyUntil:this.elapsed+this.settings.happySeconds,socialAfter:this.elapsed+this.settings.socialCooldown,bubble:null});
+      const event=this.events.find(e=>e.id===ticket.eventId);if(event)this.solve(event);else this.rewardVisit(npc);
+      this.roomOccupant=null;this.roomNextAt=this.elapsed+.75;
+    }
+    if(this.roomOccupant||this.elapsed<this.roomNextAt)return;
+    const ticket=this.roomQueue[0];if(!ticket?.activated)return;
+    const npc=this.person(ticket.npcId);if(distance(npc,WORLD.curtain)>60)return;
+    this.roomQueue.shift();this.roomOccupant={...ticket,enteredAt:this.elapsed,returnAt:this.elapsed+this.settings.secretSeconds};
+    Object.assign(npc,{state:'waiting',visible:false,moving:false,path:[],instrument:null,bubble:null});
+    const event=this.events.find(e=>e.id===ticket.eventId);if(event){event.phase='waiting';event.returnAt=this.roomOccupant.returnAt;}
+  }
+  togglePause(){if(this.mode==='playing')this.paused=!this.paused;}
+  finish(){this.mode='finished';this.dialogue=null;this.repair=null;this.player.moving=false;for(const npc of this.npcs)npc.moving=false;}
+  update(dt,input={x:0,y:0,run:false}){
     if(this.mode!=='playing'||this.paused||this.dialogue)return;
-    dt=Math.min(dt,0.05);this.elapsed+=dt;
+    dt=Math.min(dt,.05);this.elapsed+=dt;
     if(this.elapsed>=this.settings.sessionSeconds){this.elapsed=this.settings.sessionSeconds;this.finish();return;}
     if(this.elapsed>=this.nextTechnical){this.spawnEvent('microphone');this.nextTechnical=this.elapsed+Math.max(this.settings.minimumInterval,this.settings.eventInterval-this.elapsed/25);}
-    if(this.elapsed>=this.nextSocial){this.spawnEvent('comfort');this.nextSocial=this.elapsed+20;}
-    const unresolved=this.events.filter(e=>e.phase!=='waiting').length;
+    if(this.elapsed>=this.nextSocial){this.spawnNextSocial();this.nextSocial=this.elapsed+this.settings.socialInterval;}
+    const unresolved=this.events.filter(e=>['new','checking'].includes(e.phase)).length;
     this.mood=clamp(this.mood-unresolved*this.settings.decayPerProblem*dt,0,100);
-    if(!unresolved)this.mood=clamp(this.mood+0.035*dt,0,100);
-    this.maxMood=Math.max(this.maxMood,this.mood);
-    this.player.gesture=Math.max(0,this.player.gesture-dt);
-    if(this.repair) {
+    if(!unresolved)this.mood=clamp(this.mood+.035*dt,0,100);
+    this.maxMood=Math.max(this.maxMood,this.mood);this.player.gesture=Math.max(0,this.player.gesture-dt);
+    if(this.repair){
       this.player.moving=false;this.repair.elapsed+=dt;
-      if(this.repair.elapsed>=this.repair.duration) {
-        const {event,objectId}=this.repair;this.repair=null;event.checked.push(objectId);
-        if(objectId===event.cause)this.solve(event);else this.notice(DIALOGUES.notHere);
-      }
-    } else {
+      if(this.repair.elapsed>=this.repair.duration){const {event,objectId}=this.repair;this.repair=null;event.checked.push(objectId);if(objectId===event.cause)this.solve(event);else this.notice(this.pick('notHere'));}
+    }else{
       let dx=input.x||0,dy=input.y||0;const length=Math.hypot(dx,dy)||1;
       if(dx||dy)this.player.instrument=null;
       const speed=this.settings.walkSpeed*(input.run?this.settings.runMultiplier:1);
       dx=dx/Math.max(length,1)*speed*dt;dy=dy/Math.max(length,1)*speed*dt;
       const before={x:this.player.x,y:this.player.y};moveBody(this.player,dx,dy);
-      this.player.moving=distance(before,this.player)>0.01;
-      direction(this.player,dx,dy);if(this.player.moving)this.player.step+=dt*(input.run?15:11);
+      this.player.moving=distance(before,this.player)>.01;direction(this.player,dx,dy);if(this.player.moving)this.player.step+=dt*(input.run?15:11);
     }
+    if(atCurtain(this.player))for(const ticket of this.roomQueue)ticket.activated=true;
     for(const npc of this.npcs)this.updateNpc(dt,npc);
-    // Give wandering people personal space; reserved instrument positions stay fixed.
+    this.updateRoom();
     for(const npc of this.npcs){
-      if(!npc.visible||!['idle','walking','going_to_instrument'].includes(npc.state))continue;
+      if(!npc.visible||!['idle','walking','going_to_instrument','arriving'].includes(npc.state))continue;
       for(const other of this.npcs){const d=distance(npc,other);if(other!==npc&&other.visible&&d>0&&d<35)moveBody(npc,(npc.x-other.x)/d*dt*24,(npc.y-other.y)/d*dt*24);}
     }
+    if(this.elapsed>=this.nextAmbient){
+      this.nextAmbient=this.elapsed+this.settings.ambientInterval;
+      const line=this.pick('ambient');if(!this.toast||this.elapsed>this.toast.until)this.notice(line);
+    }
   }
-  updateNpc(dt,npc=this.npc) {
-    const event=npc.id===EVENT_TYPES.comfort.npcId?this.events.find(e=>e.type==='comfort'):null;
-    if(event?.phase==='following'&&(atCurtain(this.player)||event.entryRequested)&&distance(npc,WORLD.curtain)<75)this.enterCurtain(event);
-    if(event?.phase==='waiting'&&this.elapsed>=event.returnAt) {
-      npc.visible=true;Object.assign(npc,WORLD.curtain.exit);npc.direction='right';npc.state='happy';npc.happyUntil=this.elapsed+this.settings.happySeconds;this.solve(event);
+  updateNpc(dt,npc=this.npc){
+    if(npc.state==='dormant'){
+      if(this.elapsed<npc.arrivalAt)return;
+      // Do not materialize on top of someone still standing in the entrance.
+      if(this.npcs.some(n=>n!==npc&&n.visible&&distance(n,{x:1100,y:950})<38))return;
+      Object.assign(npc,{x:1100,y:950,visible:true,state:'arriving',direction:'up',path:[],repath:0});
+      this.bubble(npc,this.pick('arrival',npc.id));this.notice(npc.name+' заходит в BGD');
     }
     if(!npc.visible)return;
-    if(npc.state==='happy'&&this.elapsed>=npc.happyUntil){npc.state='idle';npc.wanderAt=this.elapsed+4;npc.instrumentAt=this.elapsed+2;}
-    if(npc.state==='playing_instrument'){
+    if(npc.state==='hysterical'){
       npc.moving=false;
-      if(this.elapsed<npc.playUntil)return;
-      npc.state='idle';npc.instrument=null;npc.instrumentAt=this.elapsed+this.settings.instrumentBreak;npc.wanderAt=this.elapsed+1;
+      if(this.elapsed>=npc.shoutAt){const line=this.pick('samatShout');this.bubble(npc,line,4);npc.shoutAt=this.elapsed+5.8;this.signals.push({type:'shout',text:line});}
+      return;
     }
-    if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.instrumentAt){
-      const available=INSTRUMENTS.filter(i=>i.id!==this.player.instrument?.id&&!this.npcs.some(n=>n!==npc&&n.instrument?.id===i.id));
-      if(available.length){npc.instrument=available[npc.instrumentIndex++%available.length];npc.state='going_to_instrument';npc.path=[];npc.repath=0;}
-      else npc.instrumentAt=this.elapsed+3;
+    if(npc.state==='sad'){npc.moving=false;return;}
+    if(npc.state==='happy'){
+      if(this.elapsed>=npc.happyUntil){npc.state='idle';npc.wanderAt=this.elapsed;npc.instrumentAt=this.elapsed+3;}
     }
-    let target=null,speed=72;
-    if(npc.state==='following_albert') {
-      const d=distance(npc,this.player);speed=this.settings.followerSpeed;
-      if(event?.entryRequested||atCurtain(this.player))target=WORLD.curtain;
-      else if(d>53)target=this.player;else{npc.path=[];npc.moving=false;return;}
-    } else if(npc.state==='going_to_instrument') {
-      target=npc.instrument;speed=115;
-      if(distance(npc,target)<7){Object.assign(npc,{x:target.x,y:target.y,direction:target.direction,state:'playing_instrument',moving:false,path:[],playUntil:this.elapsed+this.settings.instrumentSeconds});return;}
-    } else if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.wanderAt) {
-      npc.state='walking';const character=CHARACTERS.find(n=>n.id===npc.id),spots=character.wander||[character.spawn,{x:850,y:460},{x:990,y:700},{x:380,y:490},{x:1150,y:390}];target=spots[npc.wanderIndex%spots.length];
-      if(distance(npc,target)<12){npc.wanderIndex++;npc.wanderAt=this.elapsed+8;npc.state='idle';npc.path=[];target=null;}
+    const ticket=this.roomQueue.find(t=>t.npcId===npc.id);
+    let target=null,speed=85;
+    if(ticket){
+      const index=this.roomQueue.indexOf(ticket);speed=this.settings.followerSpeed;
+      if(ticket.activated){
+        target=this.queuePosition(index);npc.state='waiting_in_line';
+        const event=this.events.find(e=>e.id===ticket.eventId);if(event)event.phase='queued';
+        if(distance(npc,target)<9){npc.moving=false;npc.direction='left';if(!npc.bubble||this.elapsed>npc.bubble.until+7)this.bubble(npc,this.pick('queue'));return;}
+      }else{
+        npc.state=ticket.eventId?'following_albert':'following_queue';
+        const ahead=this.roomQueue.slice(0,index).reverse().find(t=>t.groupId===ticket.groupId);
+        target=ahead?this.person(ahead.npcId):this.player;
+        if(distance(npc,target)<53){npc.moving=false;npc.path=[];return;}
+      }
+    }else if(npc.state==='happy'){
+      target=npc.home;speed=125;if(distance(npc,target)<12){npc.moving=false;return;}
+    }else if(npc.state==='arriving'){
+      target=npc.home;speed=140;
+      if(distance(npc,target)<10){npc.state='idle';npc.moving=false;npc.wanderAt=this.elapsed+4;npc.instrumentAt=this.elapsed+this.settings.firstInstrumentAt;npc.danceAt=this.elapsed+6;return;}
+    }else{
+      if(npc.state==='dancing'){
+        npc.moving=false;if(this.elapsed<npc.danceUntil)return;
+        npc.state='idle';npc.danceAt=this.elapsed+this.settings.danceInterval;npc.instrumentAt=this.elapsed+4;
+      }
+      if(npc.id==='tema'&&this.elapsed>=npc.danceAt&&['idle','walking','playing_instrument','going_to_instrument'].includes(npc.state)){
+        if(distance(npc,{x:1080,y:480})>12){npc.state='going_to_dance';npc.instrument=null;target={x:1080,y:480};}
+        else{npc.state='dancing';npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.instrument=null;this.bubble(npc,this.pick('dance'));return;}
+      }
+      if(npc.state==='going_to_dance'){
+        target={x:1080,y:480};speed=125;
+        if(distance(npc,target)<12){npc.state='dancing';npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.moving=false;this.bubble(npc,this.pick('dance'));return;}
+      }else{
+        if(npc.state==='playing_instrument'){
+          npc.moving=false;if(this.elapsed<npc.playUntil)return;
+          npc.state='idle';npc.instrument=null;npc.instrumentAt=this.elapsed+this.settings.instrumentBreak;npc.wanderAt=this.elapsed+1;
+        }
+        if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.instrumentAt){
+          const available=INSTRUMENTS.filter(i=>i.id!==this.player.instrument?.id&&!this.npcs.some(n=>n!==npc&&n.instrument?.id===i.id));
+          if(available.length){npc.instrument=available[npc.instrumentIndex++%available.length];npc.state='going_to_instrument';npc.path=[];npc.repath=0;}
+          else npc.instrumentAt=this.elapsed+3;
+        }
+        if(npc.state==='going_to_instrument'){
+          target=npc.instrument;speed=115;
+          if(distance(npc,target)<7){Object.assign(npc,{x:target.x,y:target.y,direction:target.direction,state:'playing_instrument',moving:false,path:[],playUntil:this.elapsed+this.settings.instrumentSeconds});return;}
+        }else if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.wanderAt){
+          npc.state='walking';const character=CHARACTERS.find(n=>n.id===npc.id),spots=character.wander||[character.spawn,{x:850,y:460},{x:990,y:700},{x:380,y:490},{x:1150,y:390}];target=spots[npc.wanderIndex%spots.length];
+          if(distance(npc,target)<12){npc.wanderIndex++;npc.wanderAt=this.elapsed+8;npc.state='idle';npc.path=[];target=null;}
+        }
+      }
     }
-    npc.moving=false;
-    if(!target)return;
-    npc.repath-=dt;
-    if(npc.repath<=0||!npc.path.length){npc.path=findPath(npc,target,npc.radius);npc.repath=0.35;}
+    npc.moving=false;if(!target)return;npc.repath-=dt;
+    if(npc.repath<=0||!npc.path.length){npc.path=findPath(npc,target,npc.radius);npc.repath=.35;}
     while(npc.path.length&&distance(npc,npc.path[0])<3)npc.path.shift();
     const next=npc.path[0];if(!next)return;
     const d=distance(npc,next),step=Math.min(speed*dt,d),dx=(next.x-npc.x)/d*step,dy=(next.y-npc.y)/d*step;
-    const before={x:npc.x,y:npc.y};moveBody(npc,dx,dy);npc.moving=distance(before,npc)>0.01;
-    direction(npc,dx,dy);if(npc.moving)npc.step+=dt*10;
+    const before={x:npc.x,y:npc.y};moveBody(npc,dx,dy);npc.moving=distance(before,npc)>.01;direction(npc,dx,dy);if(npc.moving)npc.step+=dt*10;
   }
-  taskText() {
+  taskText(){
     if(this.repair)return 'Проверяю контакт…';
-    const social=this.events.find(e=>e.type==='comfort');
-    if(social?.phase==='following')return 'Доведи Лоика до шторки слева внизу · он зайдёт сам';
+    const social=this.events.find(e=>e.type==='comfort'&&e.phase==='following');
+    if(social)return 'Веди компанию к шторке слева внизу · очередь зайдёт сама';
     if(this.player.instrument)return 'Играешь на '+this.player.instrument.name+' · E или движение — закончить';
     const technical=this.events.find(e=>e.type==='microphone');
     if(technical?.phase==='checking')return 'Найди причину: кабель, усилитель или пульт';
+    const urgent=this.events.find(e=>e.type==='comfort'&&e.phase==='new'&&e.npcId==='samat');
+    if(urgent)return 'Самату срочно в «реанимационную» · подойди и нажми E';
     if(technical)return 'Микрофон молчит · подойди к значку !';
-    if(social?.phase==='new')return 'Лоик загрустил · подойди и нажми E';
-    if(social?.phase==='waiting')return 'Лоик скоро вернётся. Можно немного выдохнуть.';
+    const pending=this.events.find(e=>e.type==='comfort'&&e.phase==='new');
+    if(pending)return this.person(pending.npcId).name+' просит проводить за шторку · E';
+    if(this.roomOccupant||this.roomQueue.length)return 'Очередь движется сама. Можно заняться студией.';
     return 'Всё работает. Присматривай за студией.';
   }
 }

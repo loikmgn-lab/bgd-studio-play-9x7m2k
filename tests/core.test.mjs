@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {Game,canStand,moveBody,findPath,lineClear,distance} from '../public/core.js';
 import {WORLD,OBJECTS,SETTINGS,INSTRUMENTS} from '../public/content.js';
 const tick=(g,seconds,input={})=>{for(let i=0;i<Math.ceil(seconds/.025);i++)g.update(.025,input);};
-const active=()=>{const g=new Game({firstEventAt:999,firstSadAt:999,sessionSeconds:300},()=>.01);g.start();return g;};
+const active=()=>{const g=new Game({firstEventAt:999,firstSadAt:999,sessionSeconds:300,staggerArrivals:false,queueCompanions:0},()=>.01);g.start();return g;};
 test('all interaction positions, entrance and curtain exit are reachable from spawn',()=>{
   for(const target of [...OBJECTS,WORLD.curtain.exit]){
     assert.ok(canStand(target.x,target.y),`${target.id||'exit'} is inside a collider`);
@@ -46,7 +46,7 @@ test('escort routes around furniture; enters only nearby; returns happy and coun
   tick(g,3);assert.equal(g.stats.secretVisits,1);
 });
 test('escort automatically enters from broad curtain area without any extra E',()=>{
-  const g=active();g.spawnEvent('comfort');const e=g.events[0];e.phase='following';g.npc.state='following_albert';
+  const g=active();g.spawnEvent('comfort');const e=g.events[0];g.beginEscort(e);
   Object.assign(g.player,{x:240,y:650});Object.assign(g.npc,{x:320,y:690});
   tick(g,1);assert.equal(g.npc.visible,false);assert.equal(e.phase,'waiting');assert.equal(g.stats.secretVisits,0);
   tick(g,8);assert.equal(g.stats.secretVisits,1);
@@ -74,11 +74,11 @@ test('each crew member responds under their own name',()=>{
   for(const n of g.npcs){Object.assign(g.player,{x:n.x+20,y:n.y});g.interact();assert.equal(g.dialogue?.speaker,n.name);g.closeDialogue();}
 });
 test('Albert can play an available instrument and movement immediately releases it',()=>{
-  const g=active();Object.assign(g.player,INSTRUMENTS[1]);g.interact();assert.equal(g.player.instrument.id,'guitar');
+  const g=active();Object.assign(g.player,INSTRUMENTS[1]);g.interact();assert.equal(g.player.instrument.id,'guitar-left');
   tick(g,.1,{x:1,y:0});assert.equal(g.player.instrument,null);
 });
 test('events repeat, do not duplicate active types, and mood never ends game',()=>{
-  const g=new Game({sessionSeconds:250});g.start();tick(g,22);assert.equal(g.events.length,2);tick(g,120);assert.equal(g.events.length,2);assert.ok(g.mood>=0);assert.equal(g.mode,'playing');
+  const g=new Game({sessionSeconds:250,staggerArrivals:false,firstSadAt:21});g.start();tick(g,22);assert.equal(g.events.length,2);tick(g,120);assert.equal(g.events.length,3);assert.ok(g.mood>=0);assert.equal(g.mode,'playing');
   const e=g.events.find(e=>e.type==='microphone');g.solve(e);tick(g,36);assert.ok(g.events.some(e=>e.type==='microphone'));
 });
 test('dialogue and pause freeze session and secret timer; finish freezes gameplay',()=>{
@@ -86,4 +86,36 @@ test('dialogue and pause freeze session and secret timer; finish freezes gamepla
 });
 test('restart resets statistics, NPC visibility, dialogue and events',()=>{
   const g=active();g.stats.people=5;g.npc.visible=false;g.say('Лоик','Тест');g.start();assert.equal(g.stats.people,0);assert.equal(g.npc.visible,true);assert.equal(g.dialogue,null);assert.equal(g.events.length,0);
+});
+test('crew arrives one by one from the entrance and every member eventually arrives',()=>{
+  const g=new Game({firstEventAt:999,firstSadAt:999});g.start();assert.ok(g.npcs.every(n=>!n.visible));
+  const seen=new Set();for(let i=0;i<2400;i++){g.update(.025);for(const n of g.npcs)if(n.visible&&!seen.has(n.id)){assert.ok(n.x>1050&&n.y>910,'arrival must use entrance');seen.add(n.id);}}
+  assert.equal(seen.size,6);assert.ok(g.npcs.every(n=>canStand(n.x,n.y)));
+});
+test('Samat rolls and shouts; escort stops hysteria; Tema periodically dances',()=>{
+  const g=active(),s=g.person('samat');g.spawnEvent('comfort','samat');tick(g,.1);
+  assert.equal(s.state,'hysterical');assert.ok(g.signals.some(s=>s.type==='shout'&&/РЕАНИМАЦИОННУЮ/.test(s.text)));
+  g.beginEscort(g.events[0]);assert.equal(s.state,'following_albert');assert.ok(g.signals.some(s=>s.type==='stop-speech'));
+  const seen=new Set();for(let i=0;i<2400;i++){g.update(.025);seen.add(g.person('tema').state);}assert.ok(seen.has('dancing'));
+});
+test('three companions queue and visit strictly one at a time with happy returns',()=>{
+  const g=active();g.settings.queueCompanions=3;g.settings.secretSeconds=1;
+  g.spawnEvent('comfort','samat');g.beginEscort(g.events[0]);assert.equal(g.roomQueue.length,4);
+  const expected=g.roomQueue.map(t=>t.npcId),entered=[],returned=new Set();let checkedPause=false;Object.assign(g.player,WORLD.curtain);
+  for(let i=0;i<2400&&returned.size<4;i++){
+    g.update(.025);const hidden=g.npcs.filter(n=>!n.visible);assert.ok(hidden.length<=1,'only one person can be inside');
+    if(g.roomOccupant&&!entered.includes(g.roomOccupant.npcId))entered.push(g.roomOccupant.npcId);
+    if(g.roomOccupant&&!checkedPause){const before=g.elapsed,occupant=g.roomOccupant;g.togglePause();tick(g,3);assert.equal(g.elapsed,before);assert.equal(g.roomOccupant,occupant);g.togglePause();checkedPause=true;}
+    for(const n of g.npcs){if(n.state==='happy')returned.add(n.id);if(n.visible)assert.ok(canStand(n.x,n.y));}
+  }
+  assert.deepEqual(entered,expected);assert.equal(returned.size,4);assert.equal(g.stats.secretVisits,4);assert.equal(g.stats.people,4);
+  tick(g,3);assert.equal(g.stats.secretVisits,4);g.start();assert.deepEqual(g.roomQueue,[]);assert.equal(g.roomOccupant,null);
+});
+test('all real NPCs can receive a room event without duplicate tickets',()=>{
+  for(const id of ['loik','samat','sveta','tema','vovan','katya']){const g=active();assert.ok(g.spawnEvent('comfort',id));assert.equal(g.spawnEvent('comfort',id),false);g.beginEscort(g.events[0]);g.beginEscort(g.events[0]);assert.equal(g.roomQueue.length,1);}
+});
+test('both guitar positions and six queue positions are reachable, banter varies',()=>{
+  const g=active();assert.equal(INSTRUMENTS.filter(i=>i.pose==='guitar').length,2);
+  for(const p of [...INSTRUMENTS,...Array.from({length:6},(_,i)=>g.queuePosition(i))]){assert.ok(canStand(p.x,p.y),JSON.stringify(p));assert.ok(findPath(WORLD.spawn,p).length);}
+  assert.notEqual(g.pick('happy'),g.pick('happy'));
 });

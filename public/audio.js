@@ -1,9 +1,14 @@
 import {AUDIO} from './content.js';
 export class Sound {
   constructor(){this.enabled=false;this.context=null;}
-  async toggle(){this.enabled=!this.enabled;if(this.enabled){this.context??=new(window.AudioContext||window.webkitAudioContext)();await this.context.resume();this.play('start');}return this.enabled;}
+  stopSpeech(){globalThis.speechSynthesis?.cancel();}
+  async toggle(){this.enabled=!this.enabled;if(this.enabled){this.context??=new(window.AudioContext||window.webkitAudioContext)();await this.context.resume();this.play('start');}else this.stopSpeech();return this.enabled;}
   play(event){
+    if(event==='stop-speech'||event?.type==='stop-speech'){this.stopSpeech();return;}
     if(!this.enabled)return;
+    if(typeof event==='object'){
+      if(event.type==='shout'&&globalThis.speechSynthesis){this.stopSpeech();const phrase=new SpeechSynthesisUtterance(event.text);phrase.lang='ru-RU';phrase.rate=1.15;phrase.volume=.45;globalThis.speechSynthesis.speak(phrase);}return;
+    }
     if(AUDIO[event]){const track=new Audio(AUDIO[event]);track.volume=.3;track.play().catch(()=>{});return;}
     const context=this.context;if(!context)return;
     const notes=event==='problem'?[164]:event==='start'?[196,294]:[220,330,440];
