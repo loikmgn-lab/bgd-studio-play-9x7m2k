@@ -1,0 +1,6 @@
+backups/
+artifacts/*.png
+artifacts/*.json
+artifacts/*.tar.gz
+node_modules/
+.DS_Store
