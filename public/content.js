@@ -39,11 +39,11 @@ export const CHARACTERS = [
   { id: 'albert', name: 'Альберт', atlasRow: 0, playable: true },
   { id: 'loik', name: 'Лоик', atlasRow: 1, active: true, spawn: { x: 1000, y: 460 },
     wander: [{x:1000,y:460},{x:1130,y:635},{x:966,y:670},{x:835,y:456}] },
-  { id: 'samat', name: 'Самат', active: false },
-  { id: 'sveta', name: 'Света', active: false },
-  { id: 'tema', name: 'Тёма', active: false },
-  { id: 'vovan', name: 'Вован', active: false },
-  { id: 'katya', name: 'Катя', active: false },
+  { id: 'samat', name: 'Самат', active: true, atlasKey:'crew', atlasRow:0, spawn:{x:1100,y:660} },
+  { id: 'sveta', name: 'Света', active: true, atlasKey:'crew', atlasRow:1, spawn:{x:373,y:429} },
+  { id: 'tema', name: 'Тёма', active: true, atlasKey:'crew', atlasRow:2, spawn:{x:779,y:503} },
+  { id: 'vovan', name: 'Вован', active: true, atlasKey:'crew', atlasRow:3, spawn:{x:949,y:798} },
+  { id: 'katya', name: 'Катя', active: true, atlasKey:'crew', atlasRow:4, spawn:{x:1178,y:370} },
 ];
 export const OBJECTS = [
   { id: 'microphone', name: 'Микрофон', x: 477, y: 573, icon: '!', marker: {x:485,y:551} },

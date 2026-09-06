@@ -74,9 +74,9 @@ function direction(body,dx,dy) {
 export class Game {
   constructor(settings={},random=Math.random) { this.settings={...SETTINGS,...settings};this.random=random;this.mode='start';this.signals=[]; }
   start() {
-    const loik=CHARACTERS.find(n=>n.id==='loik');
     this.player={...WORLD.spawn,radius:12,direction:'up',moving:false,step:0,gesture:0};
-    this.npc={...loik.spawn,id:loik.id,name:loik.name,radius:12,direction:'down',moving:false,step:0,state:'idle',visible:true,path:[],repath:0,wanderAt:10,wanderIndex:0,instrument:null,instrumentIndex:0,instrumentAt:this.settings.firstInstrumentAt};
+    this.npcs=CHARACTERS.filter(n=>n.active).map((n,i)=>({...n.spawn,id:n.id,name:n.name,atlasKey:n.atlasKey||'original',atlasRow:n.atlasRow,radius:12,direction:'down',moving:false,step:0,state:'idle',visible:true,path:[],repath:0,wanderAt:10+i*3,wanderIndex:i,instrument:null,instrumentIndex:i,instrumentAt:this.settings.firstInstrumentAt+i*2}));
+    this.npc=this.npcs.find(n=>n.id==='loik'); // Stable alias for the existing authored escort event.
     this.events=[];this.elapsed=0;this.mood=this.settings.initialMood;this.maxMood=this.mood;
     this.stats={repairs:0,people:0,rehearsals:0,secretVisits:0};this.dialogue=null;this.repair=null;this.item=null;
     this.nextTechnical=this.settings.firstEventAt;this.nextSocial=this.settings.firstSadAt;
@@ -111,8 +111,9 @@ export class Game {
     const targets=this.targets().filter(t=>distance(t,this.player)<this.settings.interactionRadius);
     targets.sort((a,b)=>distance(a,this.player)-distance(b,this.player));
     if(targets.length)return targets[0];
-    if(this.npc.visible&&distance(this.npc,this.player)<70)return {id:'loik',...this.npc,action:'Поговорить с Лоиком'};
-    const instrument=INSTRUMENTS.find(i=>distance(i,this.player)<65&&this.npc.instrument?.id!==i.id&&lineClear(this.player,i));
+    const nearby=this.npcs.filter(n=>n.visible&&distance(n,this.player)<70).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
+    if(nearby)return {...nearby,action:'Поговорить · '+nearby.name};
+    const instrument=INSTRUMENTS.find(i=>distance(i,this.player)<65&&!this.npcs.some(n=>n.instrument?.id===i.id)&&lineClear(this.player,i));
     if(instrument)return {...instrument,id:'play-instrument',instrument,action:this.player.instrument?'Закончить играть':'Сыграть на '+instrument.name};
     return null;
   }
@@ -124,9 +125,10 @@ export class Game {
     const t=this.nearestTarget();if(!t)return;
     this.player.gesture=0.45;
     const event=t.event;
-    if(t.id==='loik') {
+    if(this.npcs.some(n=>n.id===t.id)) {
+      const person=this.npcs.find(n=>n.id===t.id);
       if(event?.phase==='new')this.say('Лоик',DIALOGUES.sad,()=>{event.phase='following';this.npc.state='following_albert';this.npc.repath=0;this.player.instrument=null;this.notice('Доведи Лоика до шторки слева внизу — он зайдёт сам.');});
-      else this.say('Лоик',this.npc.state==='happy'?DIALOGUES.happy:this.npc.state==='following_albert'?DIALOGUES.follow:DIALOGUES.greeting);
+      else this.say(person.name,person.state==='happy'?DIALOGUES.happy:person.state==='following_albert'?DIALOGUES.follow:person.state==='playing_instrument'?'Пока всё звучит.':DIALOGUES.greeting);
     } else if(t.id==='curtain') {
       event.entryRequested=true;
       if(distance(this.npc,WORLD.curtain)<75)this.enterCurtain(event);
@@ -156,7 +158,7 @@ export class Game {
     this.signals.push(event.kind==='technical'?'solved':'return');
   }
   togglePause() {if(this.mode==='playing')this.paused=!this.paused;}
-  finish() {this.mode='finished';this.dialogue=null;this.repair=null;this.player.moving=false;this.npc.moving=false;}
+  finish() {this.mode='finished';this.dialogue=null;this.repair=null;this.player.moving=false;for(const npc of this.npcs)npc.moving=false;}
   update(dt,input={x:0,y:0,run:false}) {
     if(this.mode!=='playing'||this.paused||this.dialogue)return;
     dt=Math.min(dt,0.05);this.elapsed+=dt;
@@ -183,10 +185,15 @@ export class Game {
       this.player.moving=distance(before,this.player)>0.01;
       direction(this.player,dx,dy);if(this.player.moving)this.player.step+=dt*(input.run?15:11);
     }
-    this.updateNpc(dt);
+    for(const npc of this.npcs)this.updateNpc(dt,npc);
+    // Give wandering people personal space; reserved instrument positions stay fixed.
+    for(const npc of this.npcs){
+      if(!npc.visible||!['idle','walking','going_to_instrument'].includes(npc.state))continue;
+      for(const other of this.npcs){const d=distance(npc,other);if(other!==npc&&other.visible&&d>0&&d<35)moveBody(npc,(npc.x-other.x)/d*dt*24,(npc.y-other.y)/d*dt*24);}
+    }
   }
-  updateNpc(dt) {
-    const npc=this.npc,event=this.events.find(e=>e.type==='comfort');
+  updateNpc(dt,npc=this.npc) {
+    const event=npc.id===EVENT_TYPES.comfort.npcId?this.events.find(e=>e.type==='comfort'):null;
     if(event?.phase==='following'&&(atCurtain(this.player)||event.entryRequested)&&distance(npc,WORLD.curtain)<75)this.enterCurtain(event);
     if(event?.phase==='waiting'&&this.elapsed>=event.returnAt) {
       npc.visible=true;Object.assign(npc,WORLD.curtain.exit);npc.direction='right';npc.state='happy';npc.happyUntil=this.elapsed+this.settings.happySeconds;this.solve(event);
@@ -199,8 +206,9 @@ export class Game {
       npc.state='idle';npc.instrument=null;npc.instrumentAt=this.elapsed+this.settings.instrumentBreak;npc.wanderAt=this.elapsed+1;
     }
     if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.instrumentAt){
-      const available=INSTRUMENTS.filter(i=>i.id!==this.player.instrument?.id);
-      npc.instrument=available[npc.instrumentIndex++%available.length];npc.state='going_to_instrument';npc.path=[];npc.repath=0;
+      const available=INSTRUMENTS.filter(i=>i.id!==this.player.instrument?.id&&!this.npcs.some(n=>n!==npc&&n.instrument?.id===i.id));
+      if(available.length){npc.instrument=available[npc.instrumentIndex++%available.length];npc.state='going_to_instrument';npc.path=[];npc.repath=0;}
+      else npc.instrumentAt=this.elapsed+3;
     }
     let target=null,speed=72;
     if(npc.state==='following_albert') {
@@ -211,7 +219,7 @@ export class Game {
       target=npc.instrument;speed=115;
       if(distance(npc,target)<7){Object.assign(npc,{x:target.x,y:target.y,direction:target.direction,state:'playing_instrument',moving:false,path:[],playUntil:this.elapsed+this.settings.instrumentSeconds});return;}
     } else if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.wanderAt) {
-      npc.state='walking';const spots=CHARACTERS.find(n=>n.id===npc.id).wander;target=spots[npc.wanderIndex%spots.length];
+      npc.state='walking';const character=CHARACTERS.find(n=>n.id===npc.id),spots=character.wander||[character.spawn,{x:850,y:460},{x:990,y:700},{x:380,y:490},{x:1150,y:390}];target=spots[npc.wanderIndex%spots.length];
       if(distance(npc,target)<12){npc.wanderIndex++;npc.wanderAt=this.elapsed+8;npc.state='idle';npc.path=[];target=null;}
     }
     npc.moving=false;

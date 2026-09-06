@@ -52,11 +52,26 @@ test('escort automatically enters from broad curtain area without any extra E',(
   tick(g,8);assert.equal(g.stats.secretVisits,1);
 });
 test('NPC reaches and plays three instruments, then repeats; sadness interrupts music',()=>{
-  const g=active();g.settings.instrumentSeconds=.4;g.settings.instrumentBreak=.1;
+  const g=active();g.npcs=[g.npc];g.settings.instrumentSeconds=.4;g.settings.instrumentBreak=.1;
   const seen=new Set();
   for(let i=0;i<3000;i++){g.update(.025);if(g.npc.state==='playing_instrument')seen.add(g.npc.instrument.id);}
   assert.deepEqual([...seen].sort(),INSTRUMENTS.map(i=>i.id).sort());
   assert.ok(g.npc.instrumentIndex>=4);assert.ok(g.spawnEvent('comfort'));assert.equal(g.npc.instrument,null);assert.equal(g.npc.state,'sad');
+});
+test('full crew spawns on reachable floor and instruments have exclusive reservations',()=>{
+  const g=active();assert.equal(g.npcs.length,6);
+  for(const n of g.npcs){assert.ok(canStand(n.x,n.y),n.name);assert.ok(findPath(WORLD.spawn,n).length,n.name);}
+  const seen=new Set();
+  for(let i=0;i<3200;i++){
+    g.update(.025);const reserved=g.npcs.filter(n=>n.instrument).map(n=>n.instrument.id);
+    assert.equal(new Set(reserved).size,reserved.length,'instrument double-booked');
+    for(const n of g.npcs){assert.ok(canStand(n.x,n.y),n.name+' inside obstacle');if(n.state==='playing_instrument')seen.add(n.id);}
+  }
+  assert.equal(seen.size,6,'each crew member gets a turn');
+});
+test('each crew member responds under their own name',()=>{
+  const g=active();
+  for(const n of g.npcs){Object.assign(g.player,{x:n.x+20,y:n.y});g.interact();assert.equal(g.dialogue?.speaker,n.name);g.closeDialogue();}
 });
 test('Albert can play an available instrument and movement immediately releases it',()=>{
   const g=active();Object.assign(g.player,INSTRUMENTS[1]);g.interact();assert.equal(g.player.instrument.id,'guitar');

@@ -14,12 +14,35 @@ export function keyedAtlas(image) {
   for(let i=0;i<data.length;i+=4){const r=data[i],g=data[i+1],b=data[i+2];const green=g-Math.max(r,b);if(green>65&&g>110)data[i+3]=0;else if(green>20&&g>90){data[i+3]=Math.round(255*(1-(green-20)/45));data[i+1]=Math.max(r,b);}}
   c.putImageData(pixels,0,0);return canvas;
 }
-export function drawFrame(context,atlas,row,direction,x,y,height) {
-  const b=boxes[row][frames[direction]??0],width=b.w/b.h*height;
+export function drawFrame(context,atlas,row,direction,x,y,height,frameBoxes=boxes) {
+  const b=frameBoxes[row][frames[direction]??0],width=b.w/b.h*height;
   context.drawImage(atlas,b.x,b.y,b.w,b.h,x-width/2,y-height,width,height);
+}
+export function detectFrames(atlas,rows){
+  const c=atlas.getContext('2d'),w=atlas.width,h=atlas.height,data=c.getImageData(0,0,w,h).data,result=[];
+  for(let row=0;row<rows;row++){result[row]=[];for(let col=0;col<4;col++){
+    const x0=Math.floor(col*w/4),x1=Math.floor((col+1)*w/4),margin=Math.ceil(h/rows*.08),y0=Math.max(0,Math.floor(row*h/rows)-margin),y1=Math.min(h,Math.floor((row+1)*h/rows)+margin);
+    // Generated rows have slightly different baselines. Ignore a neighbouring row's
+    // shoe tips by selecting the largest continuous opaque vertical band per cell.
+    let band=null,best=null;
+    for(let y=y0;y<=y1;y++){
+      let count=0;if(y<y1)for(let x=x0;x<x1;x++)if(data[(y*w+x)*4+3]>180)count++;
+      if(count){band??={top:y,bottom:y,score:0};band.bottom=y;band.score+=count;}
+      else if(band){if(!best||band.score>best.score)best=band;band=null;}
+    }
+    let left=x1,right=x0,top=best?.top??y1,bottom=best?.bottom??y0;
+    for(let y=top;y<=bottom;y++)for(let x=x0;x<x1;x++)if(data[(y*w+x)*4+3]>180){left=Math.min(left,x);right=Math.max(right,x);}
+    if(right<=left||bottom<=top)throw new Error(`Missing crew sprite ${row}/${col}`);
+    result[row][col]={x:left,y:top,w:right-left+1,h:bottom-top+1};
+  }}return result;
 }
 export class Renderer {
   constructor(canvas,background,atlas){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.background=background;this.atlas=atlas;this.motion=new MotionAtlas(atlas,boxes);this.view={scale:1,x:0,y:0};this.debug=false;}
+  addCrew(atlas){const frameBoxes=detectFrames(atlas,5);this.crew={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
+  portrait(canvas,person){
+    const source=person?.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes},row=person?.atlasRow||0,b=source.boxes[row][0],c=canvas.getContext('2d');
+    c.clearRect(0,0,canvas.width,canvas.height);c.drawImage(source.atlas,b.x+b.w*.15,b.y,b.w*.7,b.h*.31,0,0,canvas.width,canvas.height);
+  }
   resize(){const r=this.canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);this.width=r.width;this.height=r.height;this.canvas.width=Math.round(r.width*dpr);this.canvas.height=Math.round(r.height*dpr);this.dpr=dpr;this.view.scale=Math.min(r.width/WORLD.width,r.height/WORLD.height);this.view.x=(r.width-WORLD.width*this.view.scale)/2;this.view.y=(r.height-WORLD.height*this.view.scale)/2;}
   screen(p){return {x:this.view.x+p.x*this.view.scale,y:this.view.y+p.y*this.view.scale};}
   render(game,time) {
@@ -32,7 +55,7 @@ export class Renderer {
       const g=c.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,`rgba(${color},${pulse})`);g.addColorStop(1,`rgba(${color},0)`);c.fillStyle=g;c.fillRect(x-r,y-r,r*2,r*2);
     }c.globalCompositeOperation='source-over';
     if(game.player) {
-      const entities=[{body:game.player,row:0,player:true}];if(game.npc.visible)entities.push({body:game.npc,row:1,player:false});
+      const entities=[{body:game.player,row:0,player:true},...game.npcs.filter(n=>n.visible).map(n=>({body:n,row:n.atlasRow,player:false}))];
       entities.sort((a,b)=>a.body.y-b.body.y);for(const item of entities)this.character(item,time,game);
       for(const target of game.targets()){
         if(target.id==='loik')this.marker(game.npc.x,game.npc.y-140,'sad',time);
@@ -57,8 +80,9 @@ export class Renderer {
     const height=instrument?.pose==='drums'?119:player?134:131;
     if(player&&game.repair){c.translate(Math.sin(time*22)*1.5,0);c.rotate(Math.sin(time*9)*.016);}
     const pose=body.moving?'walk':instrument?.pose||(player&&game.repair?'keys':null);
-    if(pose)this.motion.draw(c,row,frames[body.direction],pose,body.moving?body.step:time*9,height);
-    else drawFrame(c,this.atlas,row,body.direction,0,0,height);
+    const source=body.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes,motion:this.motion};
+    if(pose)source.motion.draw(c,row,frames[body.direction],pose,body.moving?body.step:time*9,height);
+    else drawFrame(c,source.atlas,row,body.direction,0,0,height,source.boxes);
     if(instrument)this.playing(instrument,time);
     if(player&&body.gesture>0){c.globalAlpha=body.gesture/.45;c.strokeStyle='#f3c27e';c.lineWidth=2;c.beginPath();c.arc(0,-57,32,-.5,.7);c.stroke();}
     c.restore();

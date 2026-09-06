@@ -1,5 +1,5 @@
 import {Game} from './core.js';
-import {SETTINGS} from './content.js';
+import {SETTINGS,CHARACTERS} from './content.js';
 import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js';
 import {Sound} from './audio.js';
 const $=id=>document.getElementById(id),game=new Game(),sound=new Sound(),keys=new Set();
@@ -41,7 +41,7 @@ function updateUI(){
   }
   $('pause-screen').hidden=!game.paused||game.mode!=='playing';
   $('dialogue').hidden=!game.dialogue||game.paused||game.mode!=='playing';
-  if(game.dialogue&&game.dialogue!==dialogueRef){dialogueRef=game.dialogue;$('speaker').textContent=game.dialogue.speaker;$('line').textContent=game.dialogue.text;portrait($('dialogue-portrait'),game.dialogue.speaker==='Альберт'?0:1,true);}
+  if(game.dialogue&&game.dialogue!==dialogueRef){dialogueRef=game.dialogue;$('speaker').textContent=game.dialogue.speaker;$('line').textContent=game.dialogue.text;renderer.portrait($('dialogue-portrait'),CHARACTERS.find(n=>n.name===game.dialogue.speaker));}
   if(game.mode!=='playing')return;
   const mood=Math.round(game.mood);$('mood-number').replaceChildren(document.createTextNode(mood),Object.assign(document.createElement('span'),{textContent:'%'}));$('mood-fill').style.width=mood+'%';$('mood-fill').style.background=mood<30?'#dc8f76':mood<60?'#d9af73':'#efb764';
   $('time').textContent=formatTime(Math.max(0,Math.ceil(game.settings.sessionSeconds-game.elapsed)));
@@ -58,8 +58,8 @@ function frame(t){const dt=last?Math.min((t-last)/1000,.05):0;last=t;
   if(t-lastUi>70){updateUI();lastUi=t;}requestAnimationFrame(frame);
 }
 try {
-  const [background,characters]=await Promise.all([loadImage('./assets/studio.png'),loadImage('./assets/characters-key.png')]);
-  atlas=keyedAtlas(characters);renderer=new Renderer($('world'),background,atlas);new ResizeObserver(()=>renderer.resize()).observe($('stage'));renderer.resize();portrait($('portrait'),0);
+  const [background,characters,crew]=await Promise.all([loadImage('./assets/studio.png'),loadImage('./assets/characters-key.png'),loadImage('./assets/crew-key.png')]);
+  atlas=keyedAtlas(characters);renderer=new Renderer($('world'),background,atlas);renderer.addCrew(keyedAtlas(crew));new ResizeObserver(()=>renderer.resize()).observe($('stage'));renderer.resize();portrait($('portrait'),0);
   $('start').disabled=false;$('start').querySelector('span').textContent='НАЧАТЬ СМЕНУ';requestAnimationFrame(frame);
   // Opt-in diagnostics only. Normal players cannot accidentally teleport or shorten a shift.
   if(new URLSearchParams(location.search).get('debug')==='1')window.__bgd={game,renderer,updateUI};
