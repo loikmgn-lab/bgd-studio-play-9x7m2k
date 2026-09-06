@@ -5,12 +5,13 @@ export const SETTINGS = {
   maxEvents: 3, repairSeconds: 3, secretSeconds: 7, happySeconds: 10,
   walkSpeed: 182, runMultiplier: 1.52, followerSpeed: 248,
   interactionRadius: 83, initialMood: 76, decayPerProblem: 0.22,
+  firstInstrumentAt: 3, instrumentSeconds: 11, instrumentBreak: 5,
 };
 export const WORLD = {
   width: 1536, height: 1024,
   spawn: { x: 1100, y: 905 },
   // Only the visible studio exists. There is no secret-room map or camera target.
-  curtain: { x: 195, y: 747, exit: { x: 214, y: 753 } },
+  curtain: { x: 195, y: 747, exit: { x: 257, y: 778 }, zone: {x:120,y:620,w:180,h:275} },
   platform: { x: 373, y: 600, w: 478, h: 326, elevation: 9 },
   floor: [{x:112,y:130},{x:1390,y:130},{x:1430,y:925},{x:1148,y:925},{x:1140,y:976},{x:1064,y:976},{x:1054,y:925},{x:102,y:925}],
   obstacles: [
@@ -50,6 +51,12 @@ export const OBJECTS = [
   { id: 'amplifier', name: 'Усилитель', x: 1192, y: 805, icon: 'ϟ', marker: {x:1258,y:746} },
   { id: 'console', name: 'Пульт', x: 740, y: 230, icon: 'ϟ', marker: {x:602,y:138} },
   { id: 'curtain', name: 'Шторка', ...WORLD.curtain, icon: '…', marker: {x:145,y:706} },
+];
+// Ambient behaviour, not biographies or character-specific quests.
+export const INSTRUMENTS = [
+  {id:'synth',name:'синтезаторе',x:605,y:384,direction:'up',pose:'keys'},
+  {id:'guitar',name:'гитаре',x:1110,y:585,direction:'down',pose:'guitar'},
+  {id:'drums',name:'барабанах',x:620,y:872,direction:'up',pose:'drums'},
 ];
 export const DIALOGUES = {
   greeting: 'Всё спокойно. Пока можно просто освоиться.',

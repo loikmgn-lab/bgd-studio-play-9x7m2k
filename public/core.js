@@ -1,6 +1,7 @@
-import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES} from './content.js';
+import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS} from './content.js';
 export const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+export function atCurtain(body) {const z=WORLD.curtain.zone;return body.x>=z.x&&body.x<=z.x+z.w&&body.y>=z.y&&body.y<=z.y+z.h;}
 export function pointInPolygon(p, polygon) {
   let inside=false;
   for(let i=0,j=polygon.length-1;i<polygon.length;j=i++) {
@@ -75,7 +76,7 @@ export class Game {
   start() {
     const loik=CHARACTERS.find(n=>n.id==='loik');
     this.player={...WORLD.spawn,radius:12,direction:'up',moving:false,step:0,gesture:0};
-    this.npc={...loik.spawn,id:loik.id,name:loik.name,radius:12,direction:'down',moving:false,step:0,state:'idle',visible:true,path:[],repath:0,wanderAt:10,wanderIndex:0};
+    this.npc={...loik.spawn,id:loik.id,name:loik.name,radius:12,direction:'down',moving:false,step:0,state:'idle',visible:true,path:[],repath:0,wanderAt:10,wanderIndex:0,instrument:null,instrumentIndex:0,instrumentAt:this.settings.firstInstrumentAt};
     this.events=[];this.elapsed=0;this.mood=this.settings.initialMood;this.maxMood=this.mood;
     this.stats={repairs:0,people:0,rehearsals:0,secretVisits:0};this.dialogue=null;this.repair=null;this.item=null;
     this.nextTechnical=this.settings.firstEventAt;this.nextSocial=this.settings.firstSadAt;
@@ -86,11 +87,11 @@ export class Game {
   notice(text) { this.toast={text,until:this.elapsed+4}; }
   spawnEvent(type) {
     if(this.events.length>=this.settings.maxEvents||this.events.some(e=>e.type===type))return false;
-    if(type==='comfort'&&!['idle','walking'].includes(this.npc.state))return false;
+    if(type==='comfort'&&!['idle','walking','going_to_instrument','playing_instrument'].includes(this.npc.state))return false;
     const spec=EVENT_TYPES[type];
     const event={type,kind:spec.kind,phase:'new',born:this.elapsed,checked:[]};
     if(type==='microphone')event.cause=spec.checks[Math.floor(this.random()*spec.checks.length)];
-    else {this.npc.state='sad';this.npc.path=[];this.npc.moving=false;}
+    else {this.npc.state='sad';this.npc.path=[];this.npc.moving=false;this.npc.instrument=null;}
     this.events.push(event);this.signals.push('problem');return true;
   }
   targets() {
@@ -100,37 +101,52 @@ export class Game {
         const ids=e.phase==='new'?['microphone']:EVENT_TYPES.microphone.checks.filter(id=>!e.checked.includes(id));
         for(const id of ids)result.push({...OBJECTS.find(o=>o.id===id),event:e,action:e.phase==='new'?'Проверить микрофон':'Проверить: '+OBJECTS.find(o=>o.id===id).name.toLowerCase()});
       } else if(e.phase==='new') result.push({id:'loik',...this.npc,event:e,action:'Поговорить с Лоиком'});
-      else if(e.phase==='following')result.push({...OBJECTS.find(o=>o.id==='curtain'),event:e,action:distance(this.npc,WORLD.curtain)<125?'Проводить к шторке':'Подождать Лоика у шторки'});
+      else if(e.phase==='following')result.push({...OBJECTS.find(o=>o.id==='curtain'),event:e,action:'Проводить за шторку'});
     }
     return result;
   }
   nearestTarget() {
+    const escort=this.events.find(e=>e.type==='comfort'&&e.phase==='following');
+    if(escort&&atCurtain(this.player))return {...OBJECTS.find(o=>o.id==='curtain'),event:escort,action:'Проводить за шторку'};
     const targets=this.targets().filter(t=>distance(t,this.player)<this.settings.interactionRadius);
     targets.sort((a,b)=>distance(a,this.player)-distance(b,this.player));
     if(targets.length)return targets[0];
     if(this.npc.visible&&distance(this.npc,this.player)<70)return {id:'loik',...this.npc,action:'Поговорить с Лоиком'};
+    const instrument=INSTRUMENTS.find(i=>distance(i,this.player)<65&&this.npc.instrument?.id!==i.id&&lineClear(this.player,i));
+    if(instrument)return {...instrument,id:'play-instrument',instrument,action:this.player.instrument?'Закончить играть':'Сыграть на '+instrument.name};
     return null;
   }
   interact() {
     if(this.mode!=='playing'||this.paused)return;
     if(this.dialogue){this.closeDialogue();return;}
     if(this.repair)return;
+    if(this.player.instrument){this.player.instrument=null;return;}
     const t=this.nearestTarget();if(!t)return;
     this.player.gesture=0.45;
     const event=t.event;
     if(t.id==='loik') {
-      if(event?.phase==='new')this.say('Лоик',DIALOGUES.sad,()=>{event.phase='following';this.npc.state='following_albert';this.npc.repath=0;this.notice('Доведи Лоика до шторки слева внизу и нажми E.');});
+      if(event?.phase==='new')this.say('Лоик',DIALOGUES.sad,()=>{event.phase='following';this.npc.state='following_albert';this.npc.repath=0;this.player.instrument=null;this.notice('Доведи Лоика до шторки слева внизу — он зайдёт сам.');});
       else this.say('Лоик',this.npc.state==='happy'?DIALOGUES.happy:this.npc.state==='following_albert'?DIALOGUES.follow:DIALOGUES.greeting);
     } else if(t.id==='curtain') {
-      if(distance(this.npc,WORLD.curtain)>125){this.notice('Лоик ещё подходит. Подожди рядом со шторкой.');return;}
-      event.phase='waiting';this.npc.state='waiting';this.npc.visible=false;this.npc.moving=false;this.npc.path=[];
-      event.returnAt=this.elapsed+this.settings.secretSeconds;this.notice('Скоро вернётся. Пока можно заняться аппаратурой.');
+      event.entryRequested=true;
+      if(distance(this.npc,WORLD.curtain)<75)this.enterCurtain(event);
+      else this.notice('Лоик подходит и зайдёт сам. Повторно нажимать E не нужно.');
+    } else if(t.id==='play-instrument') {
+      this.player.instrument=this.player.instrument?null:t.instrument;
+      if(this.player.instrument){Object.assign(this.player,{x:t.x,y:t.y,direction:t.instrument.direction});this.player.moving=false;}
     } else if(t.id==='microphone'&&event.phase==='new') {
       this.say('Альберт',DIALOGUES.microphone,()=>{event.phase='checking';});
     } else if(event?.phase==='checking') {
       this.repair={event,objectId:t.id,elapsed:0,duration:this.settings.repairSeconds};
+      this.player.instrument=null;
       this.player.direction=t.id==='amplifier'?'right':'up';
     }
+  }
+  enterCurtain(event) {
+    if(event.phase!=='following')return;
+    event.phase='waiting';event.returnAt=this.elapsed+this.settings.secretSeconds;
+    Object.assign(this.npc,{state:'waiting',visible:false,moving:false,path:[],instrument:null});
+    this.notice('Скоро вернётся. Пока можно заняться аппаратурой.');
   }
   solve(event) {
     this.events=this.events.filter(e=>e!==event);
@@ -160,6 +176,7 @@ export class Game {
       }
     } else {
       let dx=input.x||0,dy=input.y||0;const length=Math.hypot(dx,dy)||1;
+      if(dx||dy)this.player.instrument=null;
       const speed=this.settings.walkSpeed*(input.run?this.settings.runMultiplier:1);
       dx=dx/Math.max(length,1)*speed*dt;dy=dy/Math.max(length,1)*speed*dt;
       const before={x:this.player.x,y:this.player.y};moveBody(this.player,dx,dy);
@@ -170,15 +187,29 @@ export class Game {
   }
   updateNpc(dt) {
     const npc=this.npc,event=this.events.find(e=>e.type==='comfort');
+    if(event?.phase==='following'&&(atCurtain(this.player)||event.entryRequested)&&distance(npc,WORLD.curtain)<75)this.enterCurtain(event);
     if(event?.phase==='waiting'&&this.elapsed>=event.returnAt) {
       npc.visible=true;Object.assign(npc,WORLD.curtain.exit);npc.direction='right';npc.state='happy';npc.happyUntil=this.elapsed+this.settings.happySeconds;this.solve(event);
     }
     if(!npc.visible)return;
-    if(npc.state==='happy'&&this.elapsed>=npc.happyUntil){npc.state='idle';npc.wanderAt=this.elapsed+4;}
+    if(npc.state==='happy'&&this.elapsed>=npc.happyUntil){npc.state='idle';npc.wanderAt=this.elapsed+4;npc.instrumentAt=this.elapsed+2;}
+    if(npc.state==='playing_instrument'){
+      npc.moving=false;
+      if(this.elapsed<npc.playUntil)return;
+      npc.state='idle';npc.instrument=null;npc.instrumentAt=this.elapsed+this.settings.instrumentBreak;npc.wanderAt=this.elapsed+1;
+    }
+    if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.instrumentAt){
+      const available=INSTRUMENTS.filter(i=>i.id!==this.player.instrument?.id);
+      npc.instrument=available[npc.instrumentIndex++%available.length];npc.state='going_to_instrument';npc.path=[];npc.repath=0;
+    }
     let target=null,speed=72;
     if(npc.state==='following_albert') {
       const d=distance(npc,this.player);speed=this.settings.followerSpeed;
-      if(d>53)target=this.player;else{npc.path=[];npc.moving=false;return;}
+      if(event?.entryRequested||atCurtain(this.player))target=WORLD.curtain;
+      else if(d>53)target=this.player;else{npc.path=[];npc.moving=false;return;}
+    } else if(npc.state==='going_to_instrument') {
+      target=npc.instrument;speed=115;
+      if(distance(npc,target)<7){Object.assign(npc,{x:target.x,y:target.y,direction:target.direction,state:'playing_instrument',moving:false,path:[],playUntil:this.elapsed+this.settings.instrumentSeconds});return;}
     } else if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.wanderAt) {
       npc.state='walking';const spots=CHARACTERS.find(n=>n.id===npc.id).wander;target=spots[npc.wanderIndex%spots.length];
       if(distance(npc,target)<12){npc.wanderIndex++;npc.wanderAt=this.elapsed+8;npc.state='idle';npc.path=[];target=null;}
@@ -196,7 +227,8 @@ export class Game {
   taskText() {
     if(this.repair)return 'Проверяю контакт…';
     const social=this.events.find(e=>e.type==='comfort');
-    if(social?.phase==='following')return 'Доведи Лоика до шторки слева внизу · E у входа';
+    if(social?.phase==='following')return 'Доведи Лоика до шторки слева внизу · он зайдёт сам';
+    if(this.player.instrument)return 'Играешь на '+this.player.instrument.name+' · E или движение — закончить';
     const technical=this.events.find(e=>e.type==='microphone');
     if(technical?.phase==='checking')return 'Найди причину: кабель, усилитель или пульт';
     if(technical)return 'Микрофон молчит · подойди к значку !';

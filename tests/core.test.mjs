@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Game,canStand,moveBody,findPath,lineClear,distance} from '../public/core.js';
-import {WORLD,OBJECTS,SETTINGS} from '../public/content.js';
+import {WORLD,OBJECTS,SETTINGS,INSTRUMENTS} from '../public/content.js';
 const tick=(g,seconds,input={})=>{for(let i=0;i<Math.ceil(seconds/.025);i++)g.update(.025,input);};
 const active=()=>{const g=new Game({firstEventAt:999,firstSadAt:999,sessionSeconds:300},()=>.01);g.start();return g;};
 test('all interaction positions, entrance and curtain exit are reachable from spawn',()=>{
@@ -39,10 +39,28 @@ test('all three randomized causes are solvable',()=>{
 test('escort routes around furniture; enters only nearby; returns happy and counts once',()=>{
   const g=active();g.spawnEvent('comfort');Object.assign(g.player,{x:g.npc.x+30,y:g.npc.y});g.interact();assert.ok(g.dialogue);g.interact();assert.equal(g.npc.state,'following_albert');
   Object.assign(g.player,WORLD.curtain);g.interact();assert.equal(g.npc.visible,true); // too far to enter
-  tick(g,9);assert.ok(distance(g.npc,WORLD.curtain)<125,`NPC stuck at ${g.npc.x},${g.npc.y}`);assert.ok(canStand(g.npc.x,g.npc.y));
-  g.interact();assert.equal(g.npc.visible,false);assert.equal(g.npc.state,'waiting');assert.equal(g.stats.secretVisits,0);
+  for(let i=0;i<320&&g.npc.visible;i++)g.update(.025);
+  assert.ok(distance(g.npc,WORLD.curtain)<75,`NPC stuck at ${g.npc.x},${g.npc.y}`);assert.ok(canStand(g.npc.x,g.npc.y));
+  assert.equal(g.npc.visible,false);assert.equal(g.npc.state,'waiting');assert.equal(g.stats.secretVisits,0);
   tick(g,6);assert.equal(g.npc.visible,false);tick(g,1.2);assert.equal(g.npc.visible,true);assert.equal(g.npc.state,'happy');assert.equal(g.stats.people,1);assert.equal(g.stats.secretVisits,1);assert.ok(canStand(g.npc.x,g.npc.y));
   tick(g,3);assert.equal(g.stats.secretVisits,1);
+});
+test('escort automatically enters from broad curtain area without any extra E',()=>{
+  const g=active();g.spawnEvent('comfort');const e=g.events[0];e.phase='following';g.npc.state='following_albert';
+  Object.assign(g.player,{x:240,y:650});Object.assign(g.npc,{x:320,y:690});
+  tick(g,1);assert.equal(g.npc.visible,false);assert.equal(e.phase,'waiting');assert.equal(g.stats.secretVisits,0);
+  tick(g,8);assert.equal(g.stats.secretVisits,1);
+});
+test('NPC reaches and plays three instruments, then repeats; sadness interrupts music',()=>{
+  const g=active();g.settings.instrumentSeconds=.4;g.settings.instrumentBreak=.1;
+  const seen=new Set();
+  for(let i=0;i<3000;i++){g.update(.025);if(g.npc.state==='playing_instrument')seen.add(g.npc.instrument.id);}
+  assert.deepEqual([...seen].sort(),INSTRUMENTS.map(i=>i.id).sort());
+  assert.ok(g.npc.instrumentIndex>=4);assert.ok(g.spawnEvent('comfort'));assert.equal(g.npc.instrument,null);assert.equal(g.npc.state,'sad');
+});
+test('Albert can play an available instrument and movement immediately releases it',()=>{
+  const g=active();Object.assign(g.player,INSTRUMENTS[1]);g.interact();assert.equal(g.player.instrument.id,'guitar');
+  tick(g,.1,{x:1,y:0});assert.equal(g.player.instrument,null);
 });
 test('events repeat, do not duplicate active types, and mood never ends game',()=>{
   const g=new Game({sessionSeconds:250});g.start();tick(g,22);assert.equal(g.events.length,2);tick(g,120);assert.equal(g.events.length,2);assert.ok(g.mood>=0);assert.equal(g.mode,'playing');

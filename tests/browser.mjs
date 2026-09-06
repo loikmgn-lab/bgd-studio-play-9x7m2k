@@ -9,7 +9,25 @@ const base=process.env.BGD_URL||'http://127.0.0.1:4178/bgd/';
 try{
   await page.goto(base+'?debug=1');await page.waitForFunction(()=>window.__bgd,{timeout:30000});
   await page.screenshot({path:'artifacts/start-desktop.png'});console.log('Start loaded; screenshot saved.');
-  if(process.argv.includes('--screens-only')){await page.click('#start');await page.waitForTimeout(500);await page.screenshot({path:'artifacts/game-desktop.png'});console.log(JSON.stringify({errors}));}
+  if(process.argv.includes('--motion')){
+    await page.click('#start');
+    await page.evaluate(()=>{
+      const {game,renderer}=window.__bgd;game.paused=true;
+      const canvas=document.createElement('canvas');canvas.id='motion-review';canvas.width=1280;canvas.height=920;canvas.style.cssText='position:fixed;left:0;top:0;z-index:9999;background:#36312f';document.body.append(canvas);
+      const c=canvas.getContext('2d');c.fillStyle='#36312f';c.fillRect(0,0,1280,920);
+      for(let dir=0;dir<4;dir++)for(let row=0;row<2;row++)for(let phase=0;phase<4;phase++){
+        c.save();c.translate((row*4+phase)*160+80,dir*230+216);renderer.motion.draw(c,row,dir,'walk',phase*Math.PI/2,185);c.restore();
+      }
+    });
+    await page.locator('#motion-review').screenshot({path:'artifacts/walk-cycle-review.png'});
+    await page.evaluate(()=>document.getElementById('motion-review').remove());
+    for(const id of ['synth','guitar','drums']){
+      await page.evaluate(async id=>{const {game}=window.__bgd,{INSTRUMENTS}=await import('./content.js');const instrument=INSTRUMENTS.find(i=>i.id===id);Object.assign(game.npc,{...instrument,state:'playing_instrument',instrument,visible:true,moving:false});game.elapsed=5;},id);
+      await page.waitForTimeout(180);await page.evaluate(()=>document.getElementById('pause-screen').style.display='none');await page.locator('#world').screenshot({path:`artifacts/playing-${id}.png`});
+    }
+    assert.deepEqual(errors,[]);console.log('Motion atlas and all instrument poses rendered without errors.');
+  }
+  else if(process.argv.includes('--screens-only')){await page.click('#start');await page.waitForTimeout(500);await page.screenshot({path:'artifacts/game-desktop.png'});console.log(JSON.stringify({errors}));}
   else{
     await page.evaluate(()=>{window.__bgd.game.settings.firstEventAt=.2;window.__bgd.game.settings.firstSadAt=.6;});
     await page.click('#start');
@@ -39,8 +57,8 @@ try{
     for(const target of checks){await walkTo(target);await page.keyboard.press('KeyE');await page.waitForFunction(()=>!window.__bgd.game.repair,{timeout:6000});}
     assert.equal((await read()).stats.repairs,1);console.log('Technical event solved through keyboard, all three checks exercised.');
     const npc=(await read()).npc;await walkTo({x:npc.x-35,y:npc.y+12});await page.keyboard.press('KeyE');await page.waitForFunction(()=>!!window.__bgd.game.dialogue);await page.keyboard.press('KeyE');
-    await walkTo({x:195,y:747});await page.waitForFunction(()=>{const n=window.__bgd.game.npc;return Math.hypot(n.x-195,n.y-747)<125;},{timeout:10000});
-    await page.screenshot({path:'artifacts/escort.png'});await page.keyboard.press('KeyE');await page.waitForFunction(()=>!window.__bgd.game.npc.visible);await page.screenshot({path:'artifacts/curtain-waiting.png'});
+    await walkTo({x:195,y:747});await page.waitForFunction(()=>!window.__bgd.game.npc.visible,{timeout:10000});
+    await page.waitForTimeout(1400);await page.screenshot({path:'artifacts/curtain-waiting.png'});
     await page.waitForFunction(()=>window.__bgd.game.npc.state==='happy',{timeout:12000});assert.equal((await read()).stats.secretVisits,1);await page.screenshot({path:'artifacts/happy-return.png'});console.log('Escort, hidden wait and happy return verified.');
     await page.keyboard.press('Escape');const before=(await read()).elapsed;await page.waitForTimeout(600);assert.equal((await read()).elapsed,before);await page.click('#resume');
     await page.evaluate(()=>{const g=window.__bgd.game;g.settings.sessionSeconds=g.elapsed+.3;});await page.waitForFunction(()=>window.__bgd.game.mode==='finished');await page.screenshot({path:'artifacts/shift-finished.png'});

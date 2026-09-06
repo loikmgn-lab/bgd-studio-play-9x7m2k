@@ -1,4 +1,5 @@
 import { WORLD } from './content.js';
+import { MotionAtlas } from './motion.js';
 const frames={down:0,right:1,up:2,left:3};
 const boxes=[
   [{x:108,y:7,w:211,h:476},{x:522,y:7,w:151,h:477},{x:858,y:7,w:190,h:477},{x:1214,y:7,w:164,h:477}],
@@ -18,10 +19,11 @@ export function drawFrame(context,atlas,row,direction,x,y,height) {
   context.drawImage(atlas,b.x,b.y,b.w,b.h,x-width/2,y-height,width,height);
 }
 export class Renderer {
-  constructor(canvas,background,atlas){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.background=background;this.atlas=atlas;this.view={scale:1,x:0,y:0};this.debug=false;}
+  constructor(canvas,background,atlas){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.background=background;this.atlas=atlas;this.motion=new MotionAtlas(atlas,boxes);this.view={scale:1,x:0,y:0};this.debug=false;}
   resize(){const r=this.canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);this.width=r.width;this.height=r.height;this.canvas.width=Math.round(r.width*dpr);this.canvas.height=Math.round(r.height*dpr);this.dpr=dpr;this.view.scale=Math.min(r.width/WORLD.width,r.height/WORLD.height);this.view.x=(r.width-WORLD.width*this.view.scale)/2;this.view.y=(r.height-WORLD.height*this.view.scale)/2;}
   screen(p){return {x:this.view.x+p.x*this.view.scale,y:this.view.y+p.y*this.view.scale};}
   render(game,time) {
+    if(game.player)time=game.elapsed;
     const c=this.ctx,v=this.view;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.fillStyle='#090b0d';c.fillRect(0,0,this.width,this.height);
     c.translate(v.x,v.y);c.scale(v.scale,v.scale);c.drawImage(this.background,0,0,WORLD.width,WORLD.height);
     // Warm practical lights and BGD's blue neon breathe very subtly.
@@ -37,7 +39,7 @@ export class Renderer {
         else{const point=target.marker||target;this.marker(point.x,point.y,target.id==='curtain'?'arrow':target.icon,time);}
       }
       const social=game.events.find(e=>e.type==='comfort');
-      if(social?.phase==='waiting')this.marker(146,715,'wait',time,(social.returnAt-game.elapsed)/game.settings.secretSeconds);
+      if(social?.phase==='waiting'){this.smoke(time,game.settings.secretSeconds-(social.returnAt-game.elapsed));this.marker(146,715,'wait',time,(social.returnAt-game.elapsed)/game.settings.secretSeconds);}
       if(game.npc.state==='happy')this.marker(game.npc.x,game.npc.y-140,'happy',time);
       if(game.npc.state==='following_albert')this.marker(game.npc.x,game.npc.y-140,'follow',time);
     }
@@ -51,13 +53,44 @@ export class Renderer {
     const bob=body.moving?Math.abs(Math.sin(body.step))*3.2:Math.sin(time*2)*.45;
     const lean=body.moving?Math.sin(body.step)*.014:0;const sad=body.state==='sad';
     c.translate(0,-bob);c.rotate(lean+(sad?.018:0));
-    const height=player?134:131;
+    const instrument=body.instrument&&(player||body.state==='playing_instrument')?body.instrument:null;
+    const height=instrument?.pose==='drums'?119:player?134:131;
     if(player&&game.repair){c.translate(Math.sin(time*22)*1.5,0);c.rotate(Math.sin(time*9)*.016);}
-    drawFrame(c,this.atlas,row,body.direction,0,0,height);
-    // Small foot cycle complements directional illustrated poses.
-    if(body.moving){c.strokeStyle=player?'#c2a278':'#c1b5ac';c.globalAlpha=.25;c.lineWidth=2;c.beginPath();c.moveTo(-8,2);c.lineTo(-8,4+Math.sin(body.step)*2);c.moveTo(8,2);c.lineTo(8,4-Math.sin(body.step)*2);c.stroke();}
+    const pose=body.moving?'walk':instrument?.pose||(player&&game.repair?'keys':null);
+    if(pose)this.motion.draw(c,row,frames[body.direction],pose,body.moving?body.step:time*9,height);
+    else drawFrame(c,this.atlas,row,body.direction,0,0,height);
+    if(instrument)this.playing(instrument,time);
     if(player&&body.gesture>0){c.globalAlpha=body.gesture/.45;c.strokeStyle='#f3c27e';c.lineWidth=2;c.beginPath();c.arc(0,-57,32,-.5,.7);c.stroke();}
     c.restore();
+  }
+  playing(instrument,time){
+    const c=this.ctx,beat=Math.sin(time*9);
+    if(instrument.pose==='guitar'){
+      c.save();c.translate(3,-65);c.rotate(-.55+beat*.025);
+      c.strokeStyle='#d7b67a';c.lineWidth=1.4;c.fillStyle='#252632';
+      c.beginPath();c.moveTo(-9,-14);c.bezierCurveTo(-26,-15,-24,13,-7,17);c.bezierCurveTo(9,23,20,5,9,-6);c.lineTo(5,-15);c.closePath();c.fill();c.stroke();
+      c.fillStyle='#b38b54';c.fillRect(-3,-48,6,39);c.fillStyle='#dacda8';c.fillRect(-4,-56,8,12);
+      c.strokeStyle='#aaa7a0';c.lineWidth=.6;for(let i=-2;i<=2;i+=2){c.beginPath();c.moveTo(i,-49);c.lineTo(i,9);c.stroke();}
+      c.fillStyle='#ddac88';c.beginPath();c.ellipse(-1,beat*4,7,3,.3,0,7);c.fill();c.restore();
+    }else if(instrument.pose==='drums'){
+      c.strokeStyle='#f3d6a0';c.lineWidth=2.5;c.lineCap='round';
+      for(const side of [-1,1]){const stroke=Math.sin(time*12+side*Math.PI/2);c.beginPath();c.moveTo(side*20,-57-stroke*5);c.lineTo(side*(29+stroke*5),-95-stroke*15);c.stroke();}
+    }else{
+      c.fillStyle='#f4d49a';for(let i=0;i<3;i++){c.globalAlpha=.3+Math.max(0,Math.sin(time*8+i))* .45;c.fillRect(-17+i*12,-75+(i%2)*2,6,3);}c.globalAlpha=1;
+    }
+    c.font='18px Arial';c.textAlign='center';c.fillStyle='#efd18e';
+    for(let i=0;i<3;i++){const t=(time*.65+i/3)%1;c.globalAlpha=Math.sin(t*Math.PI)*.8;c.fillText(i%2?'♫':'♪',27+Math.sin(t*5+i)*12,-128-t*39);}
+    c.globalAlpha=1;
+  }
+  smoke(time,age){
+    const c=this.ctx;c.save();
+    for(let i=0;i<22;i++){
+      const life=2.8,birth=i*.127,elapsed=(age-birth)%life;if(age<birth||elapsed<0)continue;
+      const t=elapsed/life,x=154+t*49+Math.sin(time*1.5+i*2)*13*t,y=760-t*141+Math.sin(i*3)*9;
+      const r=8+t*29,g=c.createRadialGradient(x-r*.2,y-r*.2,0,x,y,r);
+      const alpha=Math.sin(t*Math.PI)*.23;g.addColorStop(0,`rgba(217,203,235,${alpha})`);g.addColorStop(.55,`rgba(182,162,215,${alpha*.7})`);g.addColorStop(1,'rgba(152,133,190,0)');
+      c.fillStyle=g;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();
+    }c.restore();
   }
   marker(x,y,type,time,progress=1) {
     const c=this.ctx,bob=Math.sin(time*3+x)*3,r=16;c.save();c.translate(x,y+bob);
