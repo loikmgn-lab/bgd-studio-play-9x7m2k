@@ -1,5 +1,5 @@
-import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.5.0';
-import { MotionAtlas } from './motion.js?v=0.5.0';
+import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.5.0-r2';
+import { MotionAtlas } from './motion.js?v=0.5.0-r2';
 const frames={down:0,right:1,up:2,left:3};
 const boxes=[
   [{x:108,y:7,w:211,h:476},{x:522,y:7,w:151,h:477},{x:858,y:7,w:190,h:477},{x:1214,y:7,w:164,h:477}],
@@ -148,7 +148,7 @@ export class Renderer {
     let y=Math.max(mobile?8:115,anchor.y-h-15),placed=false;
     for(let i=0;i<8;i++){
       const rect={x,y,w,h};
-      if(y+h<this.height-(mobile?8:100)&&!this.speechRects.some(r=>x<r.x+r.w+8&&x+w+8>r.x&&y<r.y+r.h+8&&y+h+8>r.y)){this.speechRects.push(rect);placed=true;break;}
+      if(y+h<this.height-(mobile?8:100)&&![...this.speechRects,...(this.textExclusions||[])].some(r=>x<r.x+r.w+8&&x+w+8>r.x&&y<r.y+r.h+8&&y+h+8>r.y)){this.speechRects.push(rect);placed=true;break;}
       y+=h+10;
     }
     if(!placed){c.restore();return;}

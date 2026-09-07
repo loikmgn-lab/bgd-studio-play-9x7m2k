@@ -1,7 +1,7 @@
-import {Game} from './core.js?v=0.5.0';
-import {SETTINGS,CHARACTERS} from './content.js?v=0.5.0';
-import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js?v=0.5.0';
-import {Sound} from './audio.js?v=0.5.0';
+import {Game} from './core.js?v=0.5.0-r2';
+import {SETTINGS,CHARACTERS} from './content.js?v=0.5.0-r2';
+import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js?v=0.5.0-r2';
+import {Sound} from './audio.js?v=0.5.0-r2';
 const $=id=>document.getElementById(id),game=new Game(),sound=new Sound(),keys=new Set();
 let renderer,atlas,last=0,lastUi=0,shownMode='',dialogueRef=null,stick={x:0,y:0};
 const formatTime=s=>`${Math.floor(s/60).toString().padStart(2,'0')}:${Math.ceil(s%60).toString().padStart(2,'0')}`;
@@ -55,6 +55,8 @@ function updateUI(){
   if(target){$('interaction').querySelector('span').textContent=target.action;const at=renderer.screen({x:game.player.x,y:game.player.y-147});$('interaction').style.left=Math.max(110,Math.min(renderer.width-110,at.x))+'px';$('interaction').style.top=Math.max(115,at.y)+'px';}
   $('repair-progress').hidden=!game.repair;if(game.repair)$('repair-progress').querySelector('.meter>div').style.width=Math.round(game.repair.elapsed/game.repair.duration*100)+'%';
   $('touch-controls').hidden=game.paused||!!game.dialogue;
+  const canvasRect=$('world').getBoundingClientRect();
+  renderer.textExclusions=[...document.querySelectorAll('.mood-card,.shift-clock,.task-strip,#toast,#interaction,#repair-progress,#dialogue')].filter(el=>el.getClientRects().length).map(el=>{const r=el.getBoundingClientRect();return {x:r.x-canvasRect.x,y:r.y-canvasRect.y,w:r.width,h:r.height};});
 }
 function frame(t){const dt=last?Math.min((t-last)/1000,.05):0;last=t;
   const input={x:(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+stick.x,y:(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0)+stick.y,run:keys.has('ShiftLeft')||keys.has('ShiftRight')};
