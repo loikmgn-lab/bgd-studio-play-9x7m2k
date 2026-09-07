@@ -1,17 +1,17 @@
-import { WORLD, LOUNGE_GUESTS } from './content.js';
-import { MotionAtlas } from './motion.js';
+import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.5.0';
+import { MotionAtlas } from './motion.js?v=0.5.0';
 const frames={down:0,right:1,up:2,left:3};
 const boxes=[
   [{x:108,y:7,w:211,h:476},{x:522,y:7,w:151,h:477},{x:858,y:7,w:190,h:477},{x:1214,y:7,w:164,h:477}],
   [{x:105,y:500,w:216,h:492},{x:514,y:500,w:163,h:492},{x:864,y:500,w:190,h:492},{x:1215,y:500,w:160,h:492}],
 ];
 export function loadImage(url) {return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error('Не удалось загрузить '+url));image.src=url;});}
-export function keyedAtlas(image) {
+export function keyedAtlas(image,key='green') {
   // Chroma-key is a rendering material: source artwork remains unchanged.
   const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
   const c=canvas.getContext('2d',{willReadFrequently:true});c.drawImage(image,0,0);
   const pixels=c.getImageData(0,0,canvas.width,canvas.height),data=pixels.data;
-  for(let i=0;i<data.length;i+=4){const r=data[i],g=data[i+1],b=data[i+2];const green=g-Math.max(r,b);if(green>65&&g>110)data[i+3]=0;else if(green>20&&g>90){data[i+3]=Math.round(255*(1-(green-20)/45));data[i+1]=Math.max(r,b);}}
+  for(let i=0;i<data.length;i+=4){const r=data[i],g=data[i+1],b=data[i+2];if(key==='magenta'){const spill=Math.min(r,b)-g;if(spill>60){data[i+3]=0;}else if(spill>20){data[i+3]=Math.round(255*(60-spill)/40);}continue;}const green=g-Math.max(r,b);if(green>65&&g>110)data[i+3]=0;else if(green>20&&g>90){data[i+3]=Math.round(255*(1-(green-20)/45));data[i+1]=Math.max(r,b);}}
   c.putImageData(pixels,0,0);return canvas;
 }
 export function drawFrame(context,atlas,row,direction,x,y,height,frameBoxes=boxes) {
@@ -39,16 +39,20 @@ export function detectFrames(atlas,rows){
 export class Renderer {
   constructor(canvas,background,atlas){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.background=background;this.atlas=atlas;this.motion=new MotionAtlas(atlas,boxes);this.view={scale:1,x:0,y:0};this.debug=false;}
   addCrew(atlas){const frameBoxes=detectFrames(atlas,5);this.crew={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
+  addFriends(atlas){const frameBoxes=detectFrames(atlas,4);this.friends={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
   addLounge(atlas){this.lounge={atlas,boxes:detectFrames(atlas,1)};}
   portrait(canvas,person){
-    const source=person?.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes},row=person?.atlasRow||0,b=source.boxes[row][0],c=canvas.getContext('2d');
+    const source=person?.atlasKey==='friends'?this.friends:person?.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes},row=person?.atlasRow||0,b=source.boxes[row][0],c=canvas.getContext('2d');
     c.clearRect(0,0,canvas.width,canvas.height);c.drawImage(source.atlas,b.x+b.w*.15,b.y,b.w*.7,b.h*.31,0,0,canvas.width,canvas.height);
   }
   resize(){const r=this.canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);this.width=r.width;this.height=r.height;this.canvas.width=Math.round(r.width*dpr);this.canvas.height=Math.round(r.height*dpr);this.dpr=dpr;this.view.scale=Math.min(r.width/WORLD.width,r.height/WORLD.height);this.view.x=(r.width-WORLD.width*this.view.scale)/2;this.view.y=(r.height-WORLD.height*this.view.scale)/2;}
   screen(p){return {x:this.view.x+p.x*this.view.scale,y:this.view.y+p.y*this.view.scale};}
   render(game,time) {
     if(game.player)time=game.elapsed;
-    const c=this.ctx,v=this.view;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.fillStyle='#090b0d';c.fillRect(0,0,this.width,this.height);
+    const c=this.ctx,v=this.view;
+    if(this.width<700&&game.player){v.scale=Math.max(.48,Math.min(this.width/WORLD.width,this.height/WORLD.height));v.x=Math.max(this.width-WORLD.width*v.scale,Math.min(0,this.width/2-game.player.x*v.scale));v.y=Math.max(this.height-WORLD.height*v.scale,Math.min(0,this.height/2-game.player.y*v.scale));}
+    this.speechRects=[];
+    c.setTransform(this.dpr,0,0,this.dpr,0,0);c.fillStyle='#090b0d';c.fillRect(0,0,this.width,this.height);
     c.translate(v.x,v.y);c.scale(v.scale,v.scale);c.drawImage(this.background,0,0,WORLD.width,WORLD.height);
     // Warm practical lights and BGD's blue neon breathe very subtly.
     const pulse=.025+Math.sin(time*.9)*.008;c.globalCompositeOperation='screen';
@@ -70,7 +74,7 @@ export class Renderer {
         if(npc.state==='happy')this.marker(npc.x,npc.y-140,'happy',time);
         if(['following_albert','following_queue'].includes(npc.state))this.marker(npc.x,npc.y-140,'follow',time);
         if(npc.state==='waiting_in_line')this.marker(npc.x,npc.y-140,String(game.roomQueue.findIndex(t=>t.npcId===npc.id)+1),time);
-        if(npc.bubble&&npc.bubble.until>time){if(npc.state!=='waiting_in_line'||!queueSpoke)this.speech(npc,npc.bubble.text,npc.state==='hysterical');if(npc.state==='waiting_in_line')queueSpoke=true;}
+        if(!game.dialogue&&npc.bubble&&npc.bubble.until>time){if(npc.state!=='waiting_in_line'||!queueSpoke)this.speech(npc,npc.bubble.text,npc.state==='hysterical');if(npc.state==='waiting_in_line')queueSpoke=true;}
       }
     }
     if(this.debug)this.drawDebug();
@@ -87,16 +91,31 @@ export class Renderer {
     const height=instrument?.pose==='drums'?119:player?134:131;
     if(player&&game.repair){c.translate(Math.sin(time*22)*1.5,0);c.rotate(Math.sin(time*9)*.016);}
     const pose=body.moving?'walk':instrument?.pose||(player&&game.repair?'keys':null);
-    const source=body.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes,motion:this.motion};
-    if(['hysterical','dancing'].includes(body.state)){
-      const dancing=body.state==='dancing';c.translate(0,-35);c.rotate(dancing?time*4:Math.PI/2+Math.sin(time*5)*.65);c.translate(0,53);
-      source.motion.draw(c,row,0,'walk',time*(dancing?17:23),110);c.restore();return;
+    const source=body.atlasKey==='friends'?this.friends:body.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes,motion:this.motion};
+    if(body.state==='hysterical'){
+      c.translate(-53,-19);c.rotate(Math.PI/2);drawFrame(c,source.atlas,row,'down',0,0,110,source.boxes);c.restore();return;
+    }
+    if(body.state==='dancing'){
+      const age=time-(body.danceStarted??time),remaining=body.danceUntil-time;
+      const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+      const lift=ease(age/.8)*ease(remaining/.8),turn=age*7;
+      c.rotate(Math.PI*lift);c.translate(0,110*lift);
+      c.scale(lift>.98?.65+.35*Math.abs(Math.cos(turn)):1,1);
+      source.motion.draw(c,row,lift>.98?Math.floor(turn/(Math.PI/2))%4:0,'headspin',turn,110);c.restore();return;
     }
     if(pose)source.motion.draw(c,row,frames[body.direction],pose,body.moving?body.step:time*9,height);
     else drawFrame(c,source.atlas,row,body.direction,0,0,height,source.boxes);
+    if(body.drink==='whisky'||body.state==='drinking')this.drink(body,time);
     if(instrument)this.playing(instrument,time);
     if(player&&body.gesture>0){c.globalAlpha=body.gesture/.45;c.strokeStyle='#f3c27e';c.lineWidth=2;c.beginPath();c.arc(0,-57,32,-.5,.7);c.stroke();}
     c.restore();
+  }
+  drink(body,time){
+    const c=this.ctx,t=body.state==='drinking'?Math.min(1,(time-body.sipStarted)/.65,(body.sipUntil-time)/.65):0;
+    const lift=Math.max(0,t),side=body.direction==='left'?-1:1;
+    c.save();c.translate(side*(24-12*lift),-54-43*lift);c.rotate(-side*lift*.45);
+    c.strokeStyle='#d8b091';c.lineWidth=6;c.lineCap='round';c.beginPath();c.moveTo(-side*5,5);c.lineTo(-side*(9+lift*5),13+lift*6);c.stroke();
+    c.fillStyle='#d1e4ed66';c.strokeStyle='#eef7ff';c.lineWidth=1.5;c.fillRect(-6,-8,12,15);c.strokeRect(-6,-8,12,15);c.fillStyle='#bb752dcc';c.fillRect(-4,-1,8,6);c.restore();
   }
   playing(instrument,time){
     const c=this.ctx,beat=Math.sin(time*9);
@@ -118,10 +137,24 @@ export class Renderer {
     c.globalAlpha=1;
   }
   speech(npc,text,loud=false){
-    const c=this.ctx;c.save();c.font=`${loud?'bold ':''}14px Arial`;const lines=[];let line='';
-    for(const word of text.split(' ')){const next=line?line+' '+word:word;if(c.measureText(next).width>230&&line){lines.push(line);line=word;}else line=next;}if(line)lines.push(line);
-    const queued=npc.state==='waiting_in_line',w=Math.min(260,Math.max(...lines.map(s=>c.measureText(s).width))+24),h=lines.length*18+18,x=Math.max(85,Math.min(WORLD.width-w-85,queued?npc.x+100:npc.x-w/2)),y=Math.max(100,npc.y-(loud?100:queued?190:163)-h);
-    c.fillStyle=loud?'#ffe0c8f2':'#eee1cdec';c.strokeStyle=loud?'#e88459':'#796351';c.lineWidth=1.5;c.beginPath();c.roundRect(x,y,w,h,9);c.fill();c.stroke();c.fillStyle='#302721';c.textAlign='left';lines.forEach((s,i)=>c.fillText(s,x+12,y+22+i*18));c.restore();
+    const c=this.ctx,anchor=this.screen({x:npc.x,y:npc.y-135});
+    const mobile=this.width<700;
+    if(anchor.x<0||anchor.x>this.width||anchor.y<0||anchor.y>this.height||this.speechRects.length>=(mobile?1:3))return;
+    c.save();c.setTransform(this.dpr,0,0,this.dpr,0,0);c.font='13px Arial';
+    const lines=[];let line='';const maxWidth=Math.min(240,this.width-48);
+    for(const word of (npc.name+': '+text).split(' ')){const next=line?line+' '+word:word;if(c.measureText(next).width>maxWidth&&line){lines.push(line);line=word;}else line=next;}if(line)lines.push(line);
+    const w=Math.min(this.width-16,Math.max(...lines.map(t=>c.measureText(t).width))+24),h=lines.length*17+20;
+    const x=Math.max(8,Math.min(this.width-w-8,anchor.x-w/2));
+    let y=Math.max(mobile?8:115,anchor.y-h-15),placed=false;
+    for(let i=0;i<8;i++){
+      const rect={x,y,w,h};
+      if(y+h<this.height-(mobile?8:100)&&!this.speechRects.some(r=>x<r.x+r.w+8&&x+w+8>r.x&&y<r.y+r.h+8&&y+h+8>r.y)){this.speechRects.push(rect);placed=true;break;}
+      y+=h+10;
+    }
+    if(!placed){c.restore();return;}
+    c.fillStyle=loud?'#ffe0c8':'#fff4df';c.strokeStyle='#5b4638';c.lineWidth=1.5;
+    c.beginPath();c.moveTo(Math.max(x+12,Math.min(x+w-12,anchor.x)),y+h-2);c.lineTo(anchor.x,anchor.y);c.lineTo(Math.max(x+20,Math.min(x+w-4,anchor.x+10)),y+h-2);c.fill();c.stroke();
+    c.beginPath();c.roundRect(x,y,w,h,10);c.fill();c.stroke();c.fillStyle='#302721';c.textAlign='left';lines.forEach((t,i)=>c.fillText(t,x+12,y+23+i*17));c.restore();
   }
   smoke(time,age){
     const c=this.ctx;c.save();

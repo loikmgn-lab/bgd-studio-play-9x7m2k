@@ -59,7 +59,7 @@ test('NPC reaches and plays three instruments, then repeats; sadness interrupts 
   assert.ok(g.npc.instrumentIndex>=4);assert.ok(g.spawnEvent('comfort'));assert.equal(g.npc.instrument,null);assert.equal(g.npc.state,'sad');
 });
 test('full crew spawns on reachable floor and instruments have exclusive reservations',()=>{
-  const g=active();assert.equal(g.npcs.length,6);
+  const g=active();assert.equal(g.npcs.length,10);
   for(const n of g.npcs){assert.ok(canStand(n.x,n.y),n.name);assert.ok(findPath(WORLD.spawn,n).length,n.name);}
   const seen=new Set();
   for(let i=0;i<3200;i++){
@@ -67,7 +67,7 @@ test('full crew spawns on reachable floor and instruments have exclusive reserva
     assert.equal(new Set(reserved).size,reserved.length,'instrument double-booked');
     for(const n of g.npcs){assert.ok(canStand(n.x,n.y),n.name+' inside obstacle');if(n.state==='playing_instrument')seen.add(n.id);}
   }
-  assert.equal(seen.size,6,'each crew member gets a turn');
+  assert.equal(seen.size,8,'each musician gets a turn');
 });
 test('each crew member responds under their own name',()=>{
   const g=active();
@@ -90,9 +90,9 @@ test('restart resets statistics, NPC visibility, dialogue and events',()=>{
 test('crew arrives one by one from the entrance and every member eventually arrives',()=>{
   const g=new Game({firstEventAt:999,firstSadAt:999});g.start();assert.ok(g.npcs.every(n=>!n.visible));
   const seen=new Set();for(let i=0;i<2400;i++){g.update(.025);for(const n of g.npcs)if(n.visible&&!seen.has(n.id)){assert.ok(n.x>1050&&n.y>910,'arrival must use entrance');seen.add(n.id);}}
-  assert.equal(seen.size,6);assert.ok(g.npcs.every(n=>canStand(n.x,n.y)));
+  assert.equal(seen.size,10);assert.ok(g.npcs.every(n=>canStand(n.x,n.y)));
 });
-test('Samat rolls and shouts; escort stops hysteria; Tema periodically dances',()=>{
+test('Samat lies still and shouts; escort stops hysteria; Tema periodically dances',()=>{
   const g=active(),s=g.person('samat');g.spawnEvent('comfort','samat');tick(g,.1);
   assert.equal(s.state,'hysterical');assert.ok(g.signals.some(s=>s.type==='shout'&&/РЕАНИМАЦИОННУЮ/.test(s.text)));
   g.beginEscort(g.events[0]);assert.equal(s.state,'following_albert');assert.ok(g.signals.some(s=>s.type==='stop-speech'));
@@ -112,10 +112,31 @@ test('three companions queue and visit strictly one at a time with happy returns
   tick(g,3);assert.equal(g.stats.secretVisits,4);g.start();assert.deepEqual(g.roomQueue,[]);assert.equal(g.roomOccupant,null);
 });
 test('all real NPCs can receive a room event without duplicate tickets',()=>{
-  for(const id of ['loik','samat','sveta','tema','vovan','katya']){const g=active();assert.ok(g.spawnEvent('comfort',id));assert.equal(g.spawnEvent('comfort',id),false);g.beginEscort(g.events[0]);g.beginEscort(g.events[0]);assert.equal(g.roomQueue.length,1);}
+  for(const id of ['loik','samat','tema','vovan','katya','username','erbak','david']){const g=active();assert.ok(g.spawnEvent('comfort',id));assert.equal(g.spawnEvent('comfort',id),false);g.beginEscort(g.events[0]);g.beginEscort(g.events[0]);assert.equal(g.roomQueue.length,1);}
 });
 test('both guitar positions and six queue positions are reachable, banter varies',()=>{
   const g=active();assert.equal(INSTRUMENTS.filter(i=>i.pose==='guitar').length,2);
   for(const p of [...INSTRUMENTS,...Array.from({length:6},(_,i)=>g.queuePosition(i))]){assert.ok(canStand(p.x,p.y),JSON.stringify(p));assert.ok(findPath(WORLD.spawn,p).length);}
   assert.notEqual(g.pick('happy'),g.pick('happy'));
+});
+
+test('Sveta and Nikita never request or join the room; Samat stays in place',()=>{
+ const g=active();g.settings.queueCompanions=20;
+ for(const id of ['sveta','nikita'])assert.equal(g.spawnEvent('comfort',id),false);
+ const samat=g.person('samat'),pos={x:samat.x,y:samat.y};g.spawnEvent('comfort','samat');tick(g,9);
+ assert.equal(samat.x,pos.x);assert.equal(samat.y,pos.y);assert.equal(samat.moving,false);
+ g.beginEscort(g.events[0]);assert.ok(g.roomQueue.every(t=>!['sveta','nikita'].includes(t.npcId)));
+});
+test('David repeatedly drinks at the table; Nikita carries whisky and stops to sip',()=>{
+ const g=active(),seen=new Set();
+ for(let i=0;i<3600;i++){
+  g.update(.025);
+  for(const id of ['david','nikita']){const n=g.person(id);if(n.state==='drinking'){seen.add(id);assert.equal(n.moving,false);if(id==='david')assert.ok(distance(n,{x:460,y:320})<8);}}
+ }
+ assert.equal(seen.size,2);for(const id of seen){assert.ok(g.person(id).drinkCount>=2,id);assert.equal(g.person(id).instrument,null);}
+});
+test('periodic speech reaches all idle friends and freezes on pause',()=>{
+ const g=active(),seen=new Set();
+ for(let i=0;i<4000;i++){g.update(.025);for(const n of g.npcs)if(n.bubble?.until>g.elapsed)seen.add(n.id);}
+ assert.equal(seen.size,10);g.togglePause();const before=g.elapsed;tick(g,10);assert.equal(g.elapsed,before);
 });

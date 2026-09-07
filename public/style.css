@@ -5,3 +5,39 @@
 @media(max-width:850px){#shell{padding:0 10px}.topbar{height:53px;gap:17px}.edition{font-size:8px;letter-spacing:1px}.edition i{display:none}.edition{max-width:230px;line-height:1.7}#stage{margin-top:9px}footer{height:34px}footer>div{gap:7px;font-size:8px}.version{display:none}.albert-intro{right:1%;width:45%;opacity:.85}.start-copy{margin-left:6%}.start-copy h1{font-size:92px}.person-tag{right:10px}.reference-note{display:none}.mood-card{left:12px;top:12px;width:217px;padding:10px 12px}.shift-clock{top:12px;right:12px}.task-strip{font-size:10px;white-space:normal;width:max-content;max-width:92%}.start-footnote{font-size:7px}.start-copy .eyebrow{font-size:8px;letter-spacing:1px}#toast{top:89px;font-size:11px;max-width:90%;width:max-content}footer>span:first-child{font-size:8px}}
 @media(max-width:520px){.edition{display:none}.start-copy{margin-left:8%;align-self:flex-start;margin-top:7%}.start-copy h1{font-size:80px}.start-copy h2{font-size:30px}.albert-intro{height:50%;bottom:0;right:-4%;width:70%;opacity:.52}.person-tag{display:none}.start-controls{font-size:9px;gap:13px}.start-footnote{max-width:190px;line-height:1.7}.mood-card{width:195px}.mood-label{font-size:10px}.shift-clock small{font-size:6px}.shift-clock{padding:9px 11px}.task-strip{bottom:10px}#dialogue{bottom:150px;padding:13px;gap:10px}.dialogue-copy p{font-size:12px}.dialogue-avatar{width:43px;height:53px}#dialogue-next span{display:none}.end-card{padding:23px 27px}.end-card h2{font-size:30px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Dedicated text and control lanes keep the scene clear on small screens. */
+#interaction{left:50%!important;top:auto!important;bottom:58px;max-width:calc(100% - 24px);white-space:normal;font-size:13px;transform:translateX(-50%);text-align:center}
+.task-strip{font-size:12px;line-height:1.4;white-space:normal;max-width:calc(100% - 24px)}
+#toast{font-size:13px;line-height:1.4;max-width:calc(100% - 24px)}
+#dialogue-next{min-width:44px;min-height:44px}
+.overlay{overflow-y:auto}.start-copy{flex-shrink:0;max-width:calc(100% - 32px)}
+@media(max-width:700px){
+ #shell{padding:0 6px;padding-bottom:env(safe-area-inset-bottom)}
+ .topbar{height:46px}.icon-button{min-width:40px;height:38px}footer{height:22px}footer>div{display:none}
+ #stage{margin-top:4px;border-radius:8px}
+ #world{position:absolute;top:122px;left:0;width:100%;height:calc(100% - 282px)}
+ #stage:has(#start-screen:not([hidden])) #world{top:0;height:100%}
+ .mood-card{left:8px;top:8px;width:calc(100% - 104px);padding:8px}.mood-label{font-size:12px;gap:4px}.meter{margin-top:6px}
+ .shift-clock{top:8px;right:8px;padding:8px;font-size:18px}.shift-clock small{font-size:8px}
+ #toast{top:64px;left:8px;right:8px;transform:none;width:auto;margin:0;font-size:12px;max-width:none;max-height:54px;overflow-y:auto;padding:5px 8px}
+ .task-strip{bottom:114px;left:8px;right:8px;transform:none;width:auto;max-width:none;min-height:42px;padding:7px 8px;font-size:12px}
+ #interaction{bottom:78px;padding:5px 9px;font-size:12px;max-width:calc(100% - 20px)}
+ #touch-controls{display:block;bottom:8px}#joystick{width:68px;height:68px;left:12px}#touch-e{width:56px;height:56px;right:12px;bottom:4px}
+ #repair-progress{bottom:12px;width:150px;font-size:12px;padding:8px}
+ #dialogue{bottom:8px;max-width:calc(100% - 16px);width:600px;max-height:calc(100% - 140px);overflow-y:auto;padding:12px;gap:8px;z-index:4}
+ .dialogue-copy{min-width:0}.dialogue-copy p{font-size:14px;line-height:1.5}.dialogue-copy strong{font-size:12px}.dialogue-avatar{width:40px;height:50px}
+ #hud:has(~ #dialogue:not([hidden])) .task-strip{display:none}
+ .start-copy{margin:18px 16px;padding:8px 0}.start-copy h1{font-size:70px;margin:10px 0 18px}.start-copy h2{font-size:28px}.start-copy .eyebrow{font-size:9px;letter-spacing:.6px}.intro{font-size:13px;margin:14px 0 18px}
+ .start-footnote{font-size:10px;letter-spacing:.3px;max-width:245px}.start-controls{display:none}.primary-button{width:260px;font-size:12px}.albert-intro{opacity:.28}
+ .end-card{margin:auto;padding:20px}.end-card h2{font-size:27px}#stats dt{font-size:12px}.centered-overlay{padding:12px 0;align-items:flex-start}
+}
+@media(max-height:480px) and (min-width:701px){
+ .topbar{height:42px}footer{height:22px}#stage{margin-top:3px}
+ .start-copy{margin:8px 24px;padding:0}.start-copy h1{font-size:46px;margin:5px 0}.start-copy h2{font-size:24px}.intro{margin:8px 0;font-size:12px}.start-footnote,.start-controls{display:none}
+ .mood-card{top:8px;padding:7px 10px}.shift-clock{top:8px;padding:7px}#toast{top:60px;padding:6px;font-size:12px}.task-strip{bottom:4px;font-size:12px}
+ #touch-controls{bottom:45px}#joystick{width:64px;height:64px}#touch-e{width:52px;height:52px}#interaction{bottom:45px}#dialogue{bottom:40px;max-height:65%;overflow-y:auto}
+}
+@media(max-width:700px){.shift-clock{width:94px;gap:3px}.shift-clock small{font-size:7px;letter-spacing:.3px}.shift-clock>span:nth-child(2){font-size:17px;letter-spacing:1px}.mood-card{width:calc(100% - 118px)}.mood-label{font-size:11px}.mood-label strong{font-size:15px}}
+@media(max-height:480px) and (min-width:701px){.task-strip{max-width:calc(100% - 180px);padding:7px 10px}#interaction{bottom:76px;max-width:calc(100% - 240px)}}
+@media(max-width:700px){#toast{max-height:none;overflow:visible}#world{top:var(--scene-top,122px);height:calc(100% - var(--scene-top,122px) - 160px)}}

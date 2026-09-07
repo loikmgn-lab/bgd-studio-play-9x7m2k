@@ -13,6 +13,7 @@ function deformation(u,v,phase,pose,profile) {
   const outer=profile?1-smooth(.28,.43,Math.abs(u-.49)):smooth(.19,.28,Math.abs(u-.5));
   const arm=smooth(.27,.59,v)*(1-smooth(.65,.73,v))*outer;
   if(pose==='walk'){x-=arm*wave*(profile?.075:side*.105);y-=arm*Math.max(0,-side*wave)*.023;}
+  if(pose==='headspin'){x+=legs*side*(.24+wave*.05);y-=arm*.16;x+=arm*side*.12;}
   if(pose==='keys'){x-=arm*side*(.065+Math.sin(phase+side)*.035);y-=arm*(.095+Math.sin(phase*2+side)*.023);}
   if(pose==='drums'){x+=arm*side*(.08+Math.sin(phase+side)*.055);y-=arm*(.12+Math.sin(phase+side)*.065);}
   if(pose==='guitar'){x-=arm*side*.18;y-=arm*(side>0?.10+Math.sin(phase*2)*.035:.17);}
@@ -38,7 +39,7 @@ export class MotionAtlas {
     const nx=12,ny=24,grid=[];
     for(let j=0;j<=ny;j++){grid[j]=[];for(let i=0;i<=nx;i++){const u=i/nx,v=j/ny,delta=deformation(u,v,sample/16*Math.PI*2,pose,column===1||column===3);grid[j][i]={s:{x:u*w,y:v*h},d:{x:padding+(u+delta.x)*w,y:padding+(v+delta.y)*h}};}}
     for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const a=grid[j][i],b=grid[j][i+1],cc=grid[j+1][i],d=grid[j+1][i+1];for(const t of [[a,b,cc],[b,d,cc]])triangle(c,texture,t.map(v=>v.s),t.map(v=>v.d));}
-    const result={canvas,w,h,padding};this.cache.set(key,result);return result;
+    const result={canvas,w,h,padding};if(this.cache.size>=192)this.cache.delete(this.cache.keys().next().value);this.cache.set(key,result);return result;
   }
   draw(c,row,column,pose,phase,height){const f=this.frame(row,column,pose,phase),scale=height/f.h;c.drawImage(f.canvas,(-f.w/2-f.padding)*scale,(-f.h-f.padding)*scale,f.canvas.width*scale,f.canvas.height*scale);}
 }

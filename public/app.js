@@ -1,7 +1,7 @@
-import {Game} from './core.js';
-import {SETTINGS,CHARACTERS} from './content.js';
-import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js';
-import {Sound} from './audio.js';
+import {Game} from './core.js?v=0.5.0';
+import {SETTINGS,CHARACTERS} from './content.js?v=0.5.0';
+import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js?v=0.5.0';
+import {Sound} from './audio.js?v=0.5.0';
 const $=id=>document.getElementById(id),game=new Game(),sound=new Sound(),keys=new Set();
 let renderer,atlas,last=0,lastUi=0,shownMode='',dialogueRef=null,stick={x:0,y:0};
 const formatTime=s=>`${Math.floor(s/60).toString().padStart(2,'0')}:${Math.ceil(s%60).toString().padStart(2,'0')}`;
@@ -36,7 +36,7 @@ function updateUI(){
   if(shownMode!==game.mode){shownMode=game.mode;$('start-screen').hidden=game.mode!=='start';$('end-screen').hidden=game.mode!=='finished';$('hud').hidden=game.mode!=='playing';$('pause').hidden=game.mode!=='playing';$('touch-controls').hidden=game.mode!=='playing';
     if(game.mode==='finished'){
       $('rank').textContent=game.stats.repairs+game.stats.people>0?'Альберт всё разрулил':'Первая смена — знакомство с BGD';
-      const rows=[['Устранено неполадок',game.stats.repairs],['Помогли людям',game.stats.people],['Спасено репетиций',game.stats.rehearsals],['Отведено за шторку',game.stats.secretVisits],['Максимальная обстановка BGD',Math.round(game.maxMood)+'%']];
+      const rows=[['Устранено неполадок',game.stats.repairs],['Помогли людям',game.stats.people],['Спасено репетиций',game.stats.rehearsals],['Визитов в Тайную комнату',game.stats.secretVisits],['Максимальная обстановка BGD',Math.round(game.maxMood)+'%']];
       $('stats').replaceChildren(...rows.map(([name,value])=>{const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=value;row.append(dt,dd);return row;}));
     }
   }
@@ -48,6 +48,9 @@ function updateUI(){
   $('time').textContent=formatTime(Math.max(0,Math.ceil(game.settings.sessionSeconds-game.elapsed)));
   $('task').textContent=game.taskText();$('event-count').textContent=game.events.length>1?`${game.events.length} дела`:'';
   const showToast=game.toast&&game.elapsed<game.toast.until&&!game.dialogue;$('toast').hidden=!showToast;if(showToast)$('toast').textContent=game.toast.text;
+  $('stage').style.setProperty('--scene-top',Math.max(122,showToast?$('toast').offsetTop+$('toast').offsetHeight+8:0)+'px');
+  const taskStrip=document.querySelector('.task-strip');
+  $('interaction').style.bottom=(renderer.width>700?Math.max(76,$('stage').clientHeight-taskStrip.offsetTop+10):78)+'px';
   const target=game.nearestTarget();$('interaction').hidden=!target||!!game.dialogue||game.paused||!!game.repair;
   if(target){$('interaction').querySelector('span').textContent=target.action;const at=renderer.screen({x:game.player.x,y:game.player.y-147});$('interaction').style.left=Math.max(110,Math.min(renderer.width-110,at.x))+'px';$('interaction').style.top=Math.max(115,at.y)+'px';}
   $('repair-progress').hidden=!game.repair;if(game.repair)$('repair-progress').querySelector('.meter>div').style.width=Math.round(game.repair.elapsed/game.repair.duration*100)+'%';
@@ -59,9 +62,9 @@ function frame(t){const dt=last?Math.min((t-last)/1000,.05):0;last=t;
   if(t-lastUi>70){updateUI();lastUi=t;}requestAnimationFrame(frame);
 }
 try {
-  const [background,characters,crew,lounge]=await Promise.all([loadImage('./assets/studio.png'),loadImage('./assets/characters-key.png'),loadImage('./assets/crew-key.png'),loadImage('./assets/lounge-key.png')]);
-  atlas=keyedAtlas(characters);renderer=new Renderer($('world'),background,atlas);renderer.addCrew(keyedAtlas(crew));new ResizeObserver(()=>renderer.resize()).observe($('stage'));renderer.resize();portrait($('portrait'),0);
-  renderer.addLounge(keyedAtlas(lounge));
+  const [background,characters,crew,lounge,friends]=await Promise.all([loadImage('./assets/studio.png'),loadImage('./assets/characters-key.png'),loadImage('./assets/crew-key.png'),loadImage('./assets/lounge-key.png'),loadImage('./assets/friends-key.png')]);
+  atlas=keyedAtlas(characters);renderer=new Renderer($('world'),background,atlas);renderer.addCrew(keyedAtlas(crew));new ResizeObserver(()=>renderer.resize()).observe($('world'));renderer.resize();portrait($('portrait'),0);
+  renderer.addLounge(keyedAtlas(lounge));renderer.addFriends(keyedAtlas(friends,'magenta'));
   $('start').disabled=false;$('start').querySelector('span').textContent='НАЧАТЬ СМЕНУ';requestAnimationFrame(frame);
   // Opt-in diagnostics only. Normal players cannot accidentally teleport or shorten a shift.
   if(new URLSearchParams(location.search).get('debug')==='1')window.__bgd={game,renderer,updateUI};

@@ -43,9 +43,13 @@ export const CHARACTERS = [
   { id: 'loik', name: 'Лоик', atlasRow: 1, active: true, spawn: { x: 1000, y: 460 },
     wander: [{x:1000,y:460},{x:1130,y:635},{x:966,y:670},{x:835,y:456}] },
   { id: 'samat', name: 'Самат', active: true, atlasKey:'crew', atlasRow:0, spawn:{x:1100,y:660} },
-  { id: 'sveta', name: 'Света', active: true, atlasKey:'crew', atlasRow:1, spawn:{x:373,y:429} },
+  { roomAllowed:false, id: 'sveta', name: 'Света', active: true, atlasKey:'crew', atlasRow:1, spawn:{x:373,y:429} },
   { id: 'tema', name: 'Тёма', active: true, atlasKey:'crew', atlasRow:2, spawn:{x:779,y:503} },
   { id: 'vovan', name: 'Вован', active: true, atlasKey:'crew', atlasRow:3, spawn:{x:949,y:798} },
+  {id:'username',name:'Юзернейм',active:true,atlasKey:'friends',atlasRow:0,spawn:{x:850,y:570}},
+  {id:'erbak',name:'Ербак',active:true,atlasKey:'friends',atlasRow:1,spawn:{x:480,y:420}},
+  {id:'nikita',name:'Никита',active:true,atlasKey:'friends',atlasRow:2,roomAllowed:false,drink:'whisky',spawn:{x:1210,y:530}},
+  {id:'david',name:'Давид',active:true,atlasKey:'friends',atlasRow:3,drink:'table',spawn:{x:470,y:370}},
   { id: 'katya', name: 'Катя', active: true, atlasKey:'crew', atlasRow:4, spawn:{x:1178,y:370} },
 ];
 export const OBJECTS = [
@@ -53,7 +57,7 @@ export const OBJECTS = [
   { id: 'cable', name: 'Кабель', x: 751, y: 378, icon: 'ϟ', marker: {x:737,y:291} },
   { id: 'amplifier', name: 'Усилитель', x: 1192, y: 805, icon: 'ϟ', marker: {x:1258,y:746} },
   { id: 'console', name: 'Пульт', x: 740, y: 230, icon: 'ϟ', marker: {x:602,y:138} },
-  { id: 'curtain', name: 'Шторка', ...WORLD.curtain, icon: '…', marker: {x:145,y:706} },
+  { id: 'curtain', name: 'Тайная комната', ...WORLD.curtain, icon: '…', marker: {x:145,y:706} },
 ];
 // Ambient behaviour, not biographies or character-specific quests.
 export const INSTRUMENTS = [
@@ -62,7 +66,7 @@ export const INSTRUMENTS = [
   {id:'guitar-right',name:'гитаре',x:901,y:742,direction:'down',pose:'guitar'},
   {id:'drums',name:'барабанах',x:620,y:872,direction:'up',pose:'drums'},
 ];
-export const SOCIAL_ORDER=['samat','loik','sveta','vovan','katya','tema'];
+export const SOCIAL_ORDER=['samat','loik','vovan','katya','tema','erbak','username','david'];
 export const LOUNGE_GUESTS=[{id:'guest-a',x:295,y:255,frame:0,phase:0},{id:'guest-b',x:414,y:255,frame:2,phase:3.5}];
 export const DIALOGUES = {
   greeting: 'Всё спокойно. Пока можно просто освоиться.',

@@ -1,5 +1,5 @@
-import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER} from './content.js';
-import {BANTER} from './banter.js';
+import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER} from './content.js?v=0.5.0';
+import {BANTER} from './banter.js?v=0.5.0';
 export const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 export function atCurtain(body) {const z=WORLD.curtain.zone;return body.x>=z.x&&body.x<=z.x+z.w&&body.y>=z.y&&body.y<=z.y+z.h;}
@@ -77,7 +77,7 @@ export class Game {
   start(){
     this.player={...WORLD.spawn,radius:12,direction:'up',moving:false,step:0,gesture:0,instrument:null};
     this.npcs=CHARACTERS.filter(n=>n.active).map((n,i)=>({
-      ...n.spawn,id:n.id,name:n.name,home:{...n.spawn},atlasKey:n.atlasKey||'original',atlasRow:n.atlasRow,
+      roomAllowed:n.roomAllowed!==false,drink:n.drink,drinkAt:8+i,sipUntil:0,sipStarted:0,drinkCount:0,...n.spawn,id:n.id,name:n.name,home:{...n.spawn},atlasKey:n.atlasKey||'original',atlasRow:n.atlasRow,
       radius:12,direction:'down',moving:false,step:0,state:this.settings.staggerArrivals?'dormant':'idle',
       visible:!this.settings.staggerArrivals,path:[],repath:0,wanderAt:10+i*3,wanderIndex:i,
       instrument:null,instrumentIndex:i,instrumentAt:this.settings.firstInstrumentAt+i*2,
@@ -89,7 +89,7 @@ export class Game {
     this.elapsed=0;this.mood=this.settings.initialMood;this.maxMood=this.mood;
     this.stats={repairs:0,people:0,rehearsals:0,secretVisits:0};this.dialogue=null;this.repair=null;this.item=null;
     this.nextTechnical=this.settings.firstEventAt;this.nextSocial=this.settings.firstSadAt;this.socialCursor=0;
-    this.nextAmbient=this.settings.ambientInterval;this.lastLines=new Map();
+    this.nextAmbient=this.settings.ambientInterval;this.nextSpeech=6;this.speechCursor=0;this.lastLines=new Map();
     this.mode='playing';this.paused=false;this.toast={text:'Студия открыта. Сейчас начнут подтягиваться друзья.',until:5};this.signals=['start'];
   }
   person(id){return this.npcs.find(n=>n.id===id);}
@@ -106,7 +106,7 @@ export class Game {
   notice(text){this.toast={text,until:this.elapsed+4};}
   socialEvent(id){return this.events.find(e=>e.type==='comfort'&&e.npcId===id);}
   canNeedRoom(npc){
-    return npc?.visible&&['idle','walking','going_to_instrument','playing_instrument','dancing'].includes(npc.state)
+    return npc?.roomAllowed&&npc.visible&&['idle','walking','going_to_instrument','playing_instrument','dancing','going_to_table','drinking'].includes(npc.state)
       &&this.elapsed>=npc.socialAfter&&!this.socialEvent(npc.id)&&!this.roomQueue.some(t=>t.npcId===npc.id)&&this.roomOccupant?.npcId!==npc.id;
   }
   spawnEvent(type,npcId=EVENT_TYPES.comfort.npcId){
@@ -151,7 +151,7 @@ export class Game {
     return null;
   }
   beginEscort(event){
-    if(event.phase!=='new')return;
+    if(event.phase!=='new'||!this.person(event.npcId)?.roomAllowed)return;
     const npc=this.person(event.npcId),companions=this.npcs.filter(n=>n!==npc&&this.canNeedRoom(n)&&n.state!=='dancing').slice(0,this.settings.queueCompanions);
     const groupId=++this.groupSerial;event.phase='following';event.groupId=groupId;this.player.instrument=null;
     [npc,...companions].forEach((n,index)=>{
@@ -251,6 +251,11 @@ export class Game {
       if(!npc.visible||!['idle','walking','going_to_instrument','arriving'].includes(npc.state))continue;
       for(const other of this.npcs){const d=distance(npc,other);if(other!==npc&&other.visible&&d>0&&d<35)moveBody(npc,(npc.x-other.x)/d*dt*24,(npc.y-other.y)/d*dt*24);}
     }
+    if(this.elapsed>=this.nextSpeech){
+      this.nextSpeech=this.elapsed+6;
+      const available=this.npcs.filter(n=>n.visible&&!['hysterical','sad','waiting_in_line'].includes(n.state));
+      if(available.length){const n=available[this.speechCursor++%available.length];this.bubble(n,this.pick('greeting',n.id),5.5);}
+    }
     if(this.elapsed>=this.nextAmbient){
       this.nextAmbient=this.elapsed+this.settings.ambientInterval;
       const line=this.pick('ambient');if(!this.toast||this.elapsed>this.toast.until)this.notice(line);
@@ -293,24 +298,37 @@ export class Game {
     }else if(npc.state==='arriving'){
       target=npc.home;speed=140;
       if(distance(npc,target)<10){npc.state='idle';npc.moving=false;npc.wanderAt=this.elapsed+4;npc.instrumentAt=this.elapsed+this.settings.firstInstrumentAt;npc.danceAt=this.elapsed+6;return;}
+    }else if(npc.drink==='table'&&['idle','walking','going_to_table','drinking'].includes(npc.state)&&this.elapsed>=npc.drinkAt){
+      target={x:460,y:320};speed=110;npc.instrument=null;
+      if(npc.state==='drinking'){
+        npc.moving=false;if(this.elapsed<npc.sipUntil)return;
+        npc.drinkCount++;npc.state='idle';npc.drinkAt=this.elapsed+12;npc.wanderAt=this.elapsed;return;
+      }
+      npc.state='going_to_table';
+      if(distance(npc,target)<8){npc.state='drinking';npc.direction='left';npc.moving=false;npc.sipStarted=this.elapsed;npc.sipUntil=this.elapsed+3.5;this.bubble(npc,'За хороший вечер!',3.5);return;}
     }else{
+      if(npc.drink==='whisky'&&['idle','walking','drinking'].includes(npc.state)&&this.elapsed>=npc.drinkAt){
+        if(npc.state!=='drinking'){npc.state='drinking';npc.sipStarted=this.elapsed;npc.sipUntil=this.elapsed+3;npc.path=[];}
+        npc.moving=false;if(this.elapsed<npc.sipUntil)return;
+        npc.drinkCount++;npc.state='idle';npc.drinkAt=this.elapsed+9;npc.wanderAt=this.elapsed;
+      }
       if(npc.state==='dancing'){
         npc.moving=false;if(this.elapsed<npc.danceUntil)return;
         npc.state='idle';npc.danceAt=this.elapsed+this.settings.danceInterval;npc.instrumentAt=this.elapsed+4;
       }
       if(npc.id==='tema'&&this.elapsed>=npc.danceAt&&['idle','walking','playing_instrument','going_to_instrument'].includes(npc.state)){
         if(distance(npc,{x:1080,y:480})>12){npc.state='going_to_dance';npc.instrument=null;target={x:1080,y:480};}
-        else{npc.state='dancing';npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.instrument=null;this.bubble(npc,this.pick('dance'));return;}
+        else{npc.state='dancing';npc.danceStarted=this.elapsed;npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.instrument=null;this.bubble(npc,this.pick('dance'));return;}
       }
       if(npc.state==='going_to_dance'){
         target={x:1080,y:480};speed=125;
-        if(distance(npc,target)<12){npc.state='dancing';npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.moving=false;this.bubble(npc,this.pick('dance'));return;}
+        if(distance(npc,target)<12){npc.state='dancing';npc.danceStarted=this.elapsed;npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.moving=false;this.bubble(npc,this.pick('dance'));return;}
       }else{
         if(npc.state==='playing_instrument'){
           npc.moving=false;if(this.elapsed<npc.playUntil)return;
           npc.state='idle';npc.instrument=null;npc.instrumentAt=this.elapsed+this.settings.instrumentBreak;npc.wanderAt=this.elapsed+1;
         }
-        if(['idle','walking'].includes(npc.state)&&this.elapsed>=npc.instrumentAt){
+        if(!npc.drink&&['idle','walking'].includes(npc.state)&&this.elapsed>=npc.instrumentAt){
           const available=INSTRUMENTS.filter(i=>i.id!==this.player.instrument?.id&&!this.npcs.some(n=>n!==npc&&n.instrument?.id===i.id));
           if(available.length){npc.instrument=available[npc.instrumentIndex++%available.length];npc.state='going_to_instrument';npc.path=[];npc.repath=0;}
           else npc.instrumentAt=this.elapsed+3;
@@ -334,7 +352,7 @@ export class Game {
   taskText(){
     if(this.repair)return 'Проверяю контакт…';
     const social=this.events.find(e=>e.type==='comfort'&&e.phase==='following');
-    if(social)return 'Веди компанию к шторке слева внизу · очередь зайдёт сама';
+    if(social)return 'Тайная комната — слева внизу. Веди компанию к шторке';
     if(this.player.instrument)return 'Играешь на '+this.player.instrument.name+' · E или движение — закончить';
     const technical=this.events.find(e=>e.type==='microphone');
     if(technical?.phase==='checking')return 'Найди причину: кабель, усилитель или пульт';
@@ -342,7 +360,7 @@ export class Game {
     if(urgent)return 'Самату срочно в «реанимационную» · подойди и нажми E';
     if(technical)return 'Микрофон молчит · подойди к значку !';
     const pending=this.events.find(e=>e.type==='comfort'&&e.phase==='new');
-    if(pending)return this.person(pending.npcId).name+' просит проводить за шторку · E';
+    if(pending)return this.person(pending.npcId).name+' просит в Тайную комнату · E';
     if(this.roomOccupant||this.roomQueue.length)return 'Очередь движется сама. Можно заняться студией.';
     return 'Всё работает. Присматривай за студией.';
   }
