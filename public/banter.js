@@ -1,5 +1,6 @@
 // Fictional game lines requested by the user. Not quotations or biographies of real people.
 export const BANTER={
+  ascetic:['Мля, у меня же аскеза!','Хватит меня искушать!'],
   short:{
     loik:['Всё под контролем. Почти.','Ещё один дубль?'],samat:['Гитара настроена. Я — примерно.'],
     sveta:['Хорошо здесь.','Провода снова запутались.'],tema:['Вот это бит!'],

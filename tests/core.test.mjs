@@ -153,3 +153,32 @@ test('portrait orientation freezes the shift and interactions without changing m
  g.orientationBlocked=false;tick(g,.1,{x:1});assert.ok(g.elapsed>0);
  g.paused=true;g.orientationBlocked=true;g.orientationBlocked=false;tick(g,1);assert.equal(g.paused,true);
 });
+
+test('floating stick has a dead zone, analogue speed and normalized diagonals',async()=>{
+ const {stickVector}=await import('../public/controls.js');assert.deepEqual(stickVector(2,2),{x:0,y:0});
+ const half=stickVector(21,0),full=stickVector(42,0),diagonal=stickVector(100,100);
+ assert.ok(half.x>0&&half.x<full.x);assert.equal(full.x,1);assert.ok(Math.abs(Math.hypot(diagonal.x,diagonal.y)-1)<.001);
+});
+test('camera fills wide screens, remains bounded and can show the whole studio',async()=>{
+ const {cameraTarget}=await import('../public/camera.js');
+ for(const [w,h] of [[568,320],[844,390],[1440,900]])for(const p of [{x:110,y:150},{x:1400,y:920}]){
+  const v=cameraTarget(w,h,p);assert.ok(v.x<=0&&v.y<=0);assert.ok(v.x+WORLD.width*v.scale>=w-.01&&v.y+WORLD.height*v.scale>=h-.01);
+  const all=cameraTarget(w,h,p,true);assert.ok(WORLD.width*all.scale<=w+.01&&WORLD.height*all.scale<=h+.01);
+ }
+});
+test('drinking frames lift, sip and lower as one complete body pose',async()=>{
+ const {drinkFrame}=await import('../public/camera.js'),n={state:'drinking',sipStarted:10,sipUntil:13};
+ assert.deepEqual([10.1,10.4,11.4,12.5,12.9].map(t=>drinkFrame(n,t)),[0,1,2,1,0]);assert.equal(drinkFrame({state:'walking'},3),0);
+});
+
+test('Erbak declines only at his turn, walks away and allows the next visitor without a reward',()=>{
+ const g=active();g.settings.secretSeconds=.5;
+ g.spawnEvent('comfort','erbak');const event=g.events[0];g.beginEscort(event);
+ const erbak=g.person('erbak');Object.assign(erbak,{x:195,y:747});Object.assign(g.player,WORLD.curtain);g.roomQueue[0].activated=true;
+ g.spawnEvent('comfort','loik');g.beginEscort(g.events.find(e=>e.npcId==='loik'));g.roomQueue[1].activated=true;Object.assign(g.npc,{x:237,y:747});
+ // An occupied room does not trigger an early refusal.
+ g.roomOccupant={npcId:'vovan',enteredAt:0,returnAt:2,eventId:null};g.person('vovan').visible=false;
+ tick(g,.5);assert.ok(g.roomQueue.some(t=>t.npcId==='erbak'));assert.notEqual(erbak.state,'leaving_queue');
+ tick(g,2.5);assert.equal(erbak.state,'leaving_queue');assert.ok(erbak.visible);assert.match(erbak.bubble.text,/аскеза|искушать/);assert.equal(g.events.includes(event),false);assert.ok(!g.roomQueue.some(t=>t.npcId==='erbak'));
+ const visited=g.stats.secretVisits;assert.equal(visited,1);tick(g,8);assert.equal(g.stats.secretVisits,2);assert.ok(erbak.x>300);assert.ok(erbak.visible);
+});

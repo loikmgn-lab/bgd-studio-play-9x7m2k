@@ -5,19 +5,19 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#131215"><meta name="description" content="Обычный день Альберта. Маленькая 2D-игра про рок-студию BGD.">
   <title>BGD — Обычный день Альберта</title>
-  <link rel="icon" href="./favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css?v=0.6.0">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css?v=0.7.0">
 </head>
 <body>
   <main id="shell">
     <header class="topbar">
       <a class="wordmark" href="./" aria-label="BGD — на старт">BGD<span class="wordmark-dot">✦</span></a>
       <span class="edition">РЕПЕТИЦИОННАЯ БАЗА <i></i> ОБЫЧНЫЙ ДЕНЬ АЛЬБЕРТА</span>
-      <div class="top-actions"><button id="sound" class="icon-button" aria-label="Включить звук" aria-pressed="false" title="Звук">♪<span id="sound-label">выкл</span></button><button id="pause" class="icon-button" aria-label="Пауза" title="Пауза · Esc" hidden>Ⅱ</button><button id="fullscreen" class="icon-button" aria-label="На весь экран" title="На весь экран"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
+      <div class="top-actions"><button id="sound" class="icon-button" aria-label="Включить звук" aria-pressed="false" title="Звук">♪<span id="sound-label">выкл</span></button><button id="pause" class="icon-button" aria-label="Пауза" title="Пауза · Esc" hidden>Ⅱ</button><button id="overview" class="icon-button" aria-label="Вся студия" aria-pressed="false" title="Вся студия">⊞</button><button id="fullscreen" class="icon-button" aria-label="На весь экран" title="На весь экран"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
     </header>
     <section id="stage" aria-label="Игра в студии BGD">
-      <canvas id="world" aria-label="Студия BGD. Управляй Альбертом клавишами WASD или стрелками, взаимодействуй клавишей E."></canvas>
+      <canvas tabindex="0" id="world" aria-label="Студия BGD. Управляй Альбертом клавишами WASD или стрелками, взаимодействуй клавишей E."></canvas>
       <div id="hud" hidden>
-        <div class="mood-card"><div class="mood-label"><span class="status-dot"></span>Обстановка в BGD <strong id="mood-number">76<span>%</span></strong></div><div class="meter"><div id="mood-fill"></div></div></div>
+        <div class="mood-card"><div class="mood-label"><span class="status-dot"></span>Обстановка <strong id="mood-number">76<span>%</span></strong></div><div class="meter"><div id="mood-fill"></div></div></div>
         <div class="shift-clock"><span class="live-dot"></span><span id="time">03:00</span><small>ДО КОНЦА СМЕНЫ</small></div>
         <div class="task-strip"><span id="task-dot">✦</span><span id="task">Осмотрись в студии</span><span id="event-count"></span></div>
         <div id="toast" role="status" aria-live="polite" hidden></div>
@@ -41,11 +41,11 @@
       <div id="dialogue" role="dialog" aria-modal="true" aria-labelledby="speaker" hidden><div class="dialogue-avatar"><canvas id="dialogue-portrait" width="96" height="96"></canvas></div><div class="dialogue-copy"><strong id="speaker"></strong><p id="line"></p></div><button id="dialogue-next" aria-label="Продолжить диалог"><kbd>E</kbd><span>дальше →</span></button></div>
       <div id="pause-screen" class="overlay centered-overlay" hidden><div class="pause-card"><span class="eyebrow">BGD / ПЕРЕРЫВ</span><h2>Можно выдохнуть.</h2><p>Студия подождёт.</p><button id="resume" class="primary-button">ПРОДОЛЖИТЬ <b>↗</b></button><small>Esc — вернуться в игру</small></div></div>
       <div id="end-screen" class="overlay centered-overlay" hidden><div class="end-card"><div class="eyebrow">BGD / ИТОГИ</div><h2>СМЕНА<br><em>ЗАВЕРШЕНА.</em></h2><p id="rank"></p><dl id="stats"></dl><button id="restart" class="primary-button">ЕЩЁ ОДНА СМЕНА <b>↗</b></button><small>Музыка продолжается.</small></div></div>
-      <div id="touch-controls" hidden><div id="joystick" aria-label="Движение"><div id="stick"></div></div><button id="touch-e" aria-label="Взаимодействовать">E</button></div>
+      <div id="touch-controls" hidden><div id="move-zone" aria-label="Коснись слева и веди пальцем, чтобы идти"></div><span id="move-hint">Коснись слева, чтобы идти</span><div hidden id="joystick" aria-label="Движение"><div id="stick"></div></div><button id="touch-e" aria-label="Взаимодействовать">E</button></div>
     </section>
-    <footer><span><span class="footer-dot"></span> SAME ROOM. MORE MUSIC.</span><div><span><kbd>WASD</kbd> / <kbd>↑←↓→</kbd> идти</span><span><kbd>SHIFT</kbd> быстрее</span><span><kbd>E</kbd> взаимодействие</span><span><kbd>ESC</kbd> пауза</span></div><span class="version">ПЕРВАЯ СМЕНА / 0.6</span></footer>
+    <footer><span><span class="footer-dot"></span> SAME ROOM. MORE MUSIC.</span><div><span><kbd>WASD</kbd> / <kbd>↑←↓→</kbd> идти</span><span><kbd>SHIFT</kbd> быстрее</span><span><kbd>E</kbd> взаимодействие</span><span><kbd>ESC</kbd> пауза</span></div><span class="version">ПЕРВАЯ СМЕНА / 0.7</span></footer>
   </main>
   <div id="rotate-screen" role="status" hidden><div class="rotate-card"><svg width="86" height="86" viewBox="0 0 86 86" fill="none" aria-hidden="true"><rect x="15" y="27" width="56" height="33" rx="6" stroke="currentColor" stroke-width="3"/><path d="M23 20a25 25 0 0 1 42-5m0 0V5m0 10H55" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="64" cy="43" r="2" fill="currentColor"/></svg><h2>Поверни телефон</h2><p>В BGD играем горизонтально.<br>Так вся студия будет видна.</p><small>Если смена уже началась, она подождёт.</small></div></div>
-  <script type="module" src="./app.js?v=0.6.0"></script>
+  <script type="module" src="./app.js?v=0.7.0"></script>
 </body>
 </html>

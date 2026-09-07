@@ -1,5 +1,6 @@
-import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.6.0';
-import { MotionAtlas } from './motion.js?v=0.6.0';
+import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.7.0';
+import {cameraTarget,drinkFrame} from './camera.js?v=0.7.0';
+import { MotionAtlas } from './motion.js?v=0.7.0';
 const frames={down:0,right:1,up:2,left:3};
 const boxes=[
   [{x:108,y:7,w:211,h:476},{x:522,y:7,w:151,h:477},{x:858,y:7,w:190,h:477},{x:1214,y:7,w:164,h:477}],
@@ -37,20 +38,33 @@ export function detectFrames(atlas,rows){
   }}return result;
 }
 export class Renderer {
-  constructor(canvas,background,atlas){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.background=background;this.atlas=atlas;this.motion=new MotionAtlas(atlas,boxes);this.view={scale:1,x:0,y:0};this.debug=false;}
+  constructor(canvas,background,atlas){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.background=background;this.atlas=atlas;this.motion=new MotionAtlas(atlas,boxes);this.view={scale:1,x:0,y:0};this.debug=false;this.overview=false;this.cameraTime=null;this.drinks={};}
   addCrew(atlas){const frameBoxes=detectFrames(atlas,5);this.crew={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
   addFriends(atlas){const frameBoxes=detectFrames(atlas,4);this.friends={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
+  addDrink(id,atlas){const frameBoxes=detectFrames(atlas,3);this.drinks[id]={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
   addLounge(atlas){this.lounge={atlas,boxes:detectFrames(atlas,1)};}
   portrait(canvas,person){
     const source=person?.atlasKey==='friends'?this.friends:person?.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes},row=person?.atlasRow||0,b=source.boxes[row][0],c=canvas.getContext('2d');
     c.clearRect(0,0,canvas.width,canvas.height);c.drawImage(source.atlas,b.x+b.w*.15,b.y,b.w*.7,b.h*.31,0,0,canvas.width,canvas.height);
   }
-  resize(){const r=this.canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);this.width=r.width;this.height=r.height;this.canvas.width=Math.round(r.width*dpr);this.canvas.height=Math.round(r.height*dpr);this.dpr=dpr;this.view.scale=Math.min(r.width/WORLD.width,r.height/WORLD.height);this.view.x=(r.width-WORLD.width*this.view.scale)/2;this.view.y=(r.height-WORLD.height*this.view.scale)/2;}
+  resize(){
+    const r=this.canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2.5);
+    this.width=r.width;this.height=r.height;this.canvas.width=Math.round(r.width*dpr);this.canvas.height=Math.round(r.height*dpr);this.dpr=dpr;this.cameraTime=null;
+    this.ctx.imageSmoothingEnabled=true;this.ctx.imageSmoothingQuality='high';
+  }
+  updateCamera(game,time){
+    const target=cameraTarget(this.width,this.height,game.player,this.overview||!game.player);
+    const dt=this.cameraTime===null?1:Math.max(0,Math.min(.05,time-this.cameraTime));
+    const alpha=this.cameraTime===null||target.scale!==this.view.scale?1:1-Math.exp(-dt*10);
+    this.view.scale=target.scale;this.view.x+=(target.x-this.view.x)*alpha;this.view.y+=(target.y-this.view.y)*alpha;this.cameraTime=time;
+  }
+  toggleOverview(){this.overview=!this.overview;this.cameraTime=null;return this.overview;}
   screen(p){return {x:this.view.x+p.x*this.view.scale,y:this.view.y+p.y*this.view.scale};}
   render(game,time) {
     if(game.player)time=game.elapsed;
+    this.updateCamera(game,time);
     const c=this.ctx,v=this.view;
-    this.speechRects=[];
+    this.speechRects=[];this.bodyRects=[];
     c.setTransform(this.dpr,0,0,this.dpr,0,0);c.fillStyle='#090b0d';c.fillRect(0,0,this.width,this.height);
     c.translate(v.x,v.y);c.scale(v.scale,v.scale);c.drawImage(this.background,0,0,WORLD.width,WORLD.height);
     // Warm practical lights and BGD's blue neon breathe very subtly.
@@ -61,6 +75,7 @@ export class Renderer {
     if(game.player) {
       if(this.lounge)for(const guest of LOUNGE_GUESTS){const sip=(time+guest.phase)%9>6;drawFrame(c,this.lounge.atlas,0,['down','right','up','left'][guest.frame+Number(sip)],guest.x,guest.y,123,this.lounge.boxes);}
       const entities=[{body:game.player,row:0,player:true},...game.npcs.filter(n=>n.visible).map(n=>({body:n,row:n.atlasRow,player:false}))];
+      this.bodyRects=entities.map(({body})=>{const at=this.screen(body);return {x:at.x-24*v.scale,y:at.y-132*v.scale,w:48*v.scale,h:132*v.scale};});
       entities.sort((a,b)=>a.body.y-b.body.y);for(const item of entities)this.character(item,time,game);
       for(const target of game.targets()){
         if(target.event?.type==='comfort'&&target.event.phase==='new'){this.marker(target.x,target.y-140,'sad',time);}
@@ -89,8 +104,10 @@ export class Renderer {
     const instrument=body.instrument&&(player||body.state==='playing_instrument')?body.instrument:null;
     const height=instrument?.pose==='drums'?119:player?134:131;
     if(player&&game.repair){c.translate(Math.sin(time*22)*1.5,0);c.rotate(Math.sin(time*9)*.016);}
-    const pose=body.moving?'walk':instrument?.pose||(player&&game.repair?'keys':null);
-    const source=body.atlasKey==='friends'?this.friends:body.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes,motion:this.motion};
+    const drinkingSource=this.drinks[body.id]&&(body.drink==='whisky'||body.state==='drinking')?this.drinks[body.id]:null;
+    const pose=body.moving?(drinkingSource?'carry-walk':'walk'):instrument?.pose||(player&&game.repair?'keys':null);
+    const source=drinkingSource||(body.atlasKey==='friends'?this.friends:body.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes,motion:this.motion});
+    if(drinkingSource)row=drinkFrame(body,time);
     if(body.state==='hysterical'){
       c.translate(-53,-19);c.rotate(Math.PI/2);drawFrame(c,source.atlas,row,'down',0,0,110,source.boxes);c.restore();return;
     }
@@ -104,17 +121,10 @@ export class Renderer {
     }
     if(pose)source.motion.draw(c,row,frames[body.direction],pose,body.moving?body.step:time*9,height);
     else drawFrame(c,source.atlas,row,body.direction,0,0,height,source.boxes);
-    if(body.drink==='whisky'||body.state==='drinking')this.drink(body,time);
+
     if(instrument)this.playing(instrument,time);
     if(player&&body.gesture>0){c.globalAlpha=body.gesture/.45;c.strokeStyle='#f3c27e';c.lineWidth=2;c.beginPath();c.arc(0,-57,32,-.5,.7);c.stroke();}
     c.restore();
-  }
-  drink(body,time){
-    const c=this.ctx,t=body.state==='drinking'?Math.min(1,(time-body.sipStarted)/.65,(body.sipUntil-time)/.65):0;
-    const lift=Math.max(0,t),side=body.direction==='left'?-1:1;
-    c.save();c.translate(side*(24-12*lift),-54-43*lift);c.rotate(-side*lift*.45);
-    c.strokeStyle='#d8b091';c.lineWidth=6;c.lineCap='round';c.beginPath();c.moveTo(-side*5,5);c.lineTo(-side*(9+lift*5),13+lift*6);c.stroke();
-    c.fillStyle='#d1e4ed66';c.strokeStyle='#eef7ff';c.lineWidth=1.5;c.fillRect(-6,-8,12,15);c.strokeRect(-6,-8,12,15);c.fillStyle='#bb752dcc';c.fillRect(-4,-1,8,6);c.restore();
   }
   playing(instrument,time){
     const c=this.ctx,beat=Math.sin(time*9);
@@ -143,16 +153,27 @@ export class Renderer {
     const lines=[];let line='';const maxWidth=Math.min(190,this.width-48);
     for(const word of (npc.name+': '+text).split(' ')){const next=line?line+' '+word:word;if(c.measureText(next).width>maxWidth&&line){lines.push(line);line=word;}else line=next;}if(line)lines.push(line);
     const w=Math.min(this.width-16,Math.max(...lines.map(t=>c.measureText(t).width))+24),h=lines.length*17+20;
-    const x=Math.max(8,Math.min(this.width-w-8,anchor.x-w/2));
-    let y=Math.max(this.height<480?52:84,anchor.y-h-15),placed=false;
-    for(let i=0;i<8;i++){
-      const rect={x,y,w,h};
-      if(y+h<this.height-75&&![...this.speechRects,...(this.textExclusions||[])].some(r=>x<r.x+r.w+8&&x+w+8>r.x&&y<r.y+r.h+8&&y+h+8>r.y)){this.speechRects.push(rect);placed=true;break;}
-      y+=h+10;
+    const candidates=[
+      {x:anchor.x-w/2,y:anchor.y-h-12},
+      {x:anchor.x-w+18,y:anchor.y-h-12},
+      {x:anchor.x-18,y:anchor.y-h-12},
+      {x:anchor.x-w-16,y:anchor.y-h/2},
+      {x:anchor.x+16,y:anchor.y-h/2},
+    ];
+    const exclusions=[...this.speechRects,...this.bodyRects,...(this.textExclusions||[])];
+    let placed=null;
+    for(const candidate of candidates){
+      const x=Math.max(8,Math.min(this.width-w-8,candidate.x)),y=Math.max(8,candidate.y);
+      const edge={x:Math.max(x+8,Math.min(x+w-8,anchor.x)),y:Math.max(y+8,Math.min(y+h-8,anchor.y))};
+      if(y+h>this.height-65||Math.hypot(edge.x-anchor.x,edge.y-anchor.y)>38)continue;
+      if(exclusions.some(r=>x<r.x+r.w+5&&x+w+5>r.x&&y<r.y+r.h+5&&y+h+5>r.y))continue;
+      placed={x,y,w,h,edge};break;
     }
     if(!placed){c.restore();return;}
+    const {x,y,edge}=placed;this.speechRects.push({x,y,w,h});
     c.fillStyle=loud?'#ffe0c8':'#fff4df';c.strokeStyle='#5b4638';c.lineWidth=1.5;
-    c.beginPath();c.moveTo(Math.max(x+12,Math.min(x+w-12,anchor.x)),y+h-2);c.lineTo(anchor.x,anchor.y);c.lineTo(Math.max(x+20,Math.min(x+w-4,anchor.x+10)),y+h-2);c.fill();c.stroke();
+    const dx=anchor.x-edge.x,dy=anchor.y-edge.y,length=Math.hypot(dx,dy)||1,nx=-dy/length*5,ny=dx/length*5;
+    c.beginPath();c.moveTo(edge.x+nx,edge.y+ny);c.lineTo(anchor.x,anchor.y);c.lineTo(edge.x-nx,edge.y-ny);c.fill();c.stroke();
     c.beginPath();c.roundRect(x,y,w,h,10);c.fill();c.stroke();c.fillStyle='#302721';c.textAlign='left';lines.forEach((t,i)=>c.fillText(t,x+12,y+23+i*17));c.restore();
   }
   smoke(time,age){

@@ -6,7 +6,7 @@ function deformation(u,v,phase,pose,profile) {
   const wave=Math.sin(phase),side=Math.tanh((u-.5)*5);
   let x=0,y=0;
   const legs=smooth(.56,.95,v),knee=Math.sin(Math.max(0,(v-.56)/.44)*Math.PI);
-  if(pose==='walk'){
+  if(pose==='walk'||pose==='carry-walk'){
     x+=legs*side*wave*(profile?.15:.062)+knee*side*wave*.027;
     y-=legs*Math.max(0,side*wave)*.051;
   }

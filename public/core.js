@@ -1,5 +1,5 @@
-import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER} from './content.js?v=0.6.0';
-import {BANTER} from './banter.js?v=0.6.0';
+import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER} from './content.js?v=0.7.0';
+import {BANTER} from './banter.js?v=0.7.0';
 export const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 export function atCurtain(body) {const z=WORLD.curtain.zone;return body.x>=z.x&&body.x<=z.x+z.w&&body.y>=z.y&&body.y<=z.y+z.h;}
@@ -100,8 +100,8 @@ export class Game {
     if(index===last&&list.length>1)index=(index+1)%list.length;
     this.lastLines.set(token,index);return list[index];
   }
-  bubble(npc,text,duration=3.2){
-    if(this.elapsed<this.speechAvailableAt||this.dialogue||this.toast?.until>this.elapsed)return false;
+  bubble(npc,text,duration=3.2,priority=false){
+    if(this.dialogue||(!priority&&(this.elapsed<this.speechAvailableAt||this.toast?.until>this.elapsed)))return false;
     for(const n of this.npcs||[])n.bubble=null;
     npc.bubble={text,until:this.elapsed+Math.min(duration,3.2)};this.speechAvailableAt=this.elapsed+16;return true;
   }
@@ -221,6 +221,11 @@ export class Game {
     if(this.roomOccupant||this.elapsed<this.roomNextAt)return;
     const ticket=this.roomQueue[0];if(!ticket?.activated)return;
     const npc=this.person(ticket.npcId);if(distance(npc,WORLD.curtain)>60)return;
+    if(npc.id==='erbak'){
+      this.roomQueue.shift();this.events=this.events.filter(e=>e.id!==ticket.eventId);
+      Object.assign(npc,{state:'leaving_queue',path:[],instrument:null,moving:false,direction:'right',socialAfter:this.elapsed+this.settings.socialCooldown});
+      this.bubble(npc,this.pick('ascetic'),3.2,true);this.roomNextAt=this.elapsed+.75;return;
+    }
     this.roomQueue.shift();this.roomOccupant={...ticket,enteredAt:this.elapsed,returnAt:this.elapsed+this.settings.secretSeconds};
     Object.assign(npc,{state:'waiting',visible:false,moving:false,path:[],instrument:null,bubble:null});
     const event=this.events.find(e=>e.id===ticket.eventId);if(event){event.phase='waiting';event.returnAt=this.roomOccupant.returnAt;}
@@ -297,6 +302,9 @@ export class Game {
         target=ahead?this.person(ahead.npcId):this.player;
         if(distance(npc,target)<53){npc.moving=false;npc.path=[];return;}
       }
+    }else if(npc.state==='leaving_queue'){
+      target=npc.home;speed=125;
+      if(distance(npc,target)<12){npc.state='idle';npc.moving=false;npc.wanderAt=this.elapsed+5;npc.instrumentAt=this.elapsed+3;return;}
     }else if(npc.state==='happy'){
       target=npc.home;speed=125;if(distance(npc,target)<12){npc.moving=false;return;}
     }else if(npc.state==='arriving'){
@@ -347,7 +355,7 @@ export class Game {
       }
     }
     npc.moving=false;if(!target)return;npc.repath-=dt;
-    if(npc.repath<=0||!npc.path.length){npc.path=findPath(npc,target,npc.radius);npc.repath=.35;}
+    if(!npc.path.length||(npc.repath<=0&&(!npc.routeTarget||distance(npc.routeTarget,target)>20))){npc.path=findPath(npc,target,npc.radius);npc.routeTarget={x:target.x,y:target.y};npc.repath=.35;}
     while(npc.path.length&&distance(npc,npc.path[0])<3)npc.path.shift();
     const next=npc.path[0];if(!next)return;
     const d=distance(npc,next),step=Math.min(speed*dt,d),dx=(next.x-npc.x)/d*step,dy=(next.y-npc.y)/d*step;
