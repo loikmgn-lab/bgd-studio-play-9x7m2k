@@ -1,5 +1,5 @@
-import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.5.0-r2';
-import { MotionAtlas } from './motion.js?v=0.5.0-r2';
+import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.6.0';
+import { MotionAtlas } from './motion.js?v=0.6.0';
 const frames={down:0,right:1,up:2,left:3};
 const boxes=[
   [{x:108,y:7,w:211,h:476},{x:522,y:7,w:151,h:477},{x:858,y:7,w:190,h:477},{x:1214,y:7,w:164,h:477}],
@@ -50,7 +50,6 @@ export class Renderer {
   render(game,time) {
     if(game.player)time=game.elapsed;
     const c=this.ctx,v=this.view;
-    if(this.width<700&&game.player){v.scale=Math.max(.48,Math.min(this.width/WORLD.width,this.height/WORLD.height));v.x=Math.max(this.width-WORLD.width*v.scale,Math.min(0,this.width/2-game.player.x*v.scale));v.y=Math.max(this.height-WORLD.height*v.scale,Math.min(0,this.height/2-game.player.y*v.scale));}
     this.speechRects=[];
     c.setTransform(this.dpr,0,0,this.dpr,0,0);c.fillStyle='#090b0d';c.fillRect(0,0,this.width,this.height);
     c.translate(v.x,v.y);c.scale(v.scale,v.scale);c.drawImage(this.background,0,0,WORLD.width,WORLD.height);
@@ -139,16 +138,16 @@ export class Renderer {
   speech(npc,text,loud=false){
     const c=this.ctx,anchor=this.screen({x:npc.x,y:npc.y-135});
     const mobile=this.width<700;
-    if(anchor.x<0||anchor.x>this.width||anchor.y<0||anchor.y>this.height||this.speechRects.length>=(mobile?1:3))return;
+    if(anchor.x<0||anchor.x>this.width||anchor.y<0||anchor.y>this.height||this.speechRects.length>=1)return;
     c.save();c.setTransform(this.dpr,0,0,this.dpr,0,0);c.font='13px Arial';
-    const lines=[];let line='';const maxWidth=Math.min(240,this.width-48);
+    const lines=[];let line='';const maxWidth=Math.min(190,this.width-48);
     for(const word of (npc.name+': '+text).split(' ')){const next=line?line+' '+word:word;if(c.measureText(next).width>maxWidth&&line){lines.push(line);line=word;}else line=next;}if(line)lines.push(line);
     const w=Math.min(this.width-16,Math.max(...lines.map(t=>c.measureText(t).width))+24),h=lines.length*17+20;
     const x=Math.max(8,Math.min(this.width-w-8,anchor.x-w/2));
-    let y=Math.max(mobile?8:115,anchor.y-h-15),placed=false;
+    let y=Math.max(this.height<480?52:84,anchor.y-h-15),placed=false;
     for(let i=0;i<8;i++){
       const rect={x,y,w,h};
-      if(y+h<this.height-(mobile?8:100)&&![...this.speechRects,...(this.textExclusions||[])].some(r=>x<r.x+r.w+8&&x+w+8>r.x&&y<r.y+r.h+8&&y+h+8>r.y)){this.speechRects.push(rect);placed=true;break;}
+      if(y+h<this.height-75&&![...this.speechRects,...(this.textExclusions||[])].some(r=>x<r.x+r.w+8&&x+w+8>r.x&&y<r.y+r.h+8&&y+h+8>r.y)){this.speechRects.push(rect);placed=true;break;}
       y+=h+10;
     }
     if(!placed){c.restore();return;}

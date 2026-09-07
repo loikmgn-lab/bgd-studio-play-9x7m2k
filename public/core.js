@@ -1,5 +1,5 @@
-import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER} from './content.js?v=0.5.0-r2';
-import {BANTER} from './banter.js?v=0.5.0-r2';
+import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER} from './content.js?v=0.6.0';
+import {BANTER} from './banter.js?v=0.6.0';
 export const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 export function atCurtain(body) {const z=WORLD.curtain.zone;return body.x>=z.x&&body.x<=z.x+z.w&&body.y>=z.y&&body.y<=z.y+z.h;}
@@ -89,21 +89,25 @@ export class Game {
     this.elapsed=0;this.mood=this.settings.initialMood;this.maxMood=this.mood;
     this.stats={repairs:0,people:0,rehearsals:0,secretVisits:0};this.dialogue=null;this.repair=null;this.item=null;
     this.nextTechnical=this.settings.firstEventAt;this.nextSocial=this.settings.firstSadAt;this.socialCursor=0;
-    this.nextAmbient=this.settings.ambientInterval;this.nextSpeech=6;this.speechCursor=0;this.lastLines=new Map();
-    this.mode='playing';this.paused=false;this.toast={text:'Студия открыта. Сейчас начнут подтягиваться друзья.',until:5};this.signals=['start'];
+    this.nextAmbient=this.settings.ambientInterval;this.nextSpeech=12;this.speechCursor=0;this.speechAvailableAt=0;this.lastLines=new Map();
+    this.mode='playing';this.paused=false;this.toast=null;this.signals=['start'];
   }
   person(id){return this.npcs.find(n=>n.id===id);}
   pick(key,id){
-    const list=key==='greeting'?(BANTER.greeting[id]||BANTER.arrival):BANTER[key];
+    const list=['greeting','short'].includes(key)?(BANTER[key][id]||BANTER.arrival):BANTER[key];
     if(!list?.length)return DIALOGUES[key]||'Всё будет норм.';
     const token=key+'/'+(id||''),last=this.lastLines.get(token);let index=Math.floor(this.random()*list.length);
     if(index===last&&list.length>1)index=(index+1)%list.length;
     this.lastLines.set(token,index);return list[index];
   }
-  bubble(npc,text,duration=3.6){npc.bubble={text,until:this.elapsed+duration};}
+  bubble(npc,text,duration=3.2){
+    if(this.elapsed<this.speechAvailableAt||this.dialogue||this.toast?.until>this.elapsed)return false;
+    for(const n of this.npcs||[])n.bubble=null;
+    npc.bubble={text,until:this.elapsed+Math.min(duration,3.2)};this.speechAvailableAt=this.elapsed+16;return true;
+  }
   say(speaker,text,after=null){this.dialogue={speaker,text,after};}
   closeDialogue(){const after=this.dialogue?.after;this.dialogue=null;after?.();}
-  notice(text){this.toast={text,until:this.elapsed+4};}
+  notice(text){this.toast={text,until:this.elapsed+3};for(const n of this.npcs||[])n.bubble=null;}
   socialEvent(id){return this.events.find(e=>e.type==='comfort'&&e.npcId===id);}
   canNeedRoom(npc){
     return npc?.roomAllowed&&npc.visible&&['idle','walking','going_to_instrument','playing_instrument','dancing','going_to_table','drinking'].includes(npc.state)
@@ -118,7 +122,7 @@ export class Game {
     else{
       event.npcId=npcId;const npc=this.person(npcId);
       Object.assign(npc,{state:npcId==='samat'?'hysterical':'sad',path:[],moving:false,instrument:null,shoutAt:this.elapsed});
-      if(npcId!=='samat')this.bubble(npc,this.pick('sad'));
+      if(npcId!=='samat')this.bubble(npc,'Альберт, проводишь?');
     }
     this.events.push(event);this.signals.push('problem');return true;
   }
@@ -157,13 +161,13 @@ export class Game {
     [npc,...companions].forEach((n,index)=>{
       Object.assign(n,{state:index?'following_queue':'following_albert',moving:false,instrument:null,path:[],repath:0,groupId,bubble:null});
       this.roomQueue.push({npcId:n.id,eventId:index?null:event.id,groupId,activated:false});
-      if(index)this.bubble(n,this.pick('joined'),3.4+index*.3);
+      // Joining the group is visible in the queue; no announcement needed.
     });
     this.signals.push({type:'stop-speech'});
-    this.notice(companions.length?'Доведи компанию до шторки. Все зайдут по очереди.':'Доведи '+npc.name+' до шторки — дальше автоматически.');
+    this.notice('Веди компанию к Тайной комнате слева внизу.');
   }
   interact(){
-    if(this.mode!=='playing'||this.paused)return;
+    if(this.mode!=='playing'||this.paused||this.orientationBlocked)return;
     if(this.dialogue){this.closeDialogue();return;}
     if(this.repair)return;
     if(this.player.instrument){this.player.instrument=null;return;}
@@ -177,7 +181,7 @@ export class Game {
       }
     }else if(target.id==='curtain'){
       for(const ticket of this.roomQueue)if(ticket.groupId===event.groupId)ticket.activated=true;
-      this.notice('Очередь принята. Повторно нажимать E не нужно.');
+      this.notice('Все зайдут по очереди.');
     }else if(target.id==='play-instrument'){
       this.player.instrument=target.instrument;Object.assign(this.player,{x:target.x,y:target.y,direction:target.instrument.direction,moving:false});
     }else if(target.id==='microphone'&&event.phase==='new'){
@@ -196,7 +200,7 @@ export class Game {
   rewardVisit(npc){
     this.stats.people++;this.stats.secretVisits++;
     this.mood=clamp(this.mood+EVENT_TYPES.comfort.reward,0,100);this.maxMood=Math.max(this.maxMood,this.mood);
-    const line=this.pick('happy',npc.id);this.bubble(npc,line);this.notice(npc.name+': «'+line+'»');
+    this.bubble(npc,'Теперь всё отлично!');
     this.signals.push('return');
   }
   solve(event){
@@ -204,7 +208,7 @@ export class Game {
     this.events=this.events.filter(e=>e!==event);
     if(event.kind==='technical'){
       this.stats.repairs++;this.stats.rehearsals++;this.mood=clamp(this.mood+EVENT_TYPES[event.type].reward,0,100);this.maxMood=Math.max(this.maxMood,this.mood);
-      this.notice(this.pick('fixed'));this.nextTechnical=Math.max(this.nextTechnical,this.elapsed+12);this.signals.push('solved');
+      this.notice('Микрофон снова работает.');this.nextTechnical=Math.max(this.nextTechnical,this.elapsed+12);this.signals.push('solved');
     }else this.rewardVisit(this.person(event.npcId));
   }
   updateRoom(){
@@ -224,7 +228,7 @@ export class Game {
   togglePause(){if(this.mode==='playing')this.paused=!this.paused;}
   finish(){this.mode='finished';this.dialogue=null;this.repair=null;this.player.moving=false;for(const npc of this.npcs)npc.moving=false;}
   update(dt,input={x:0,y:0,run:false}){
-    if(this.mode!=='playing'||this.paused||this.dialogue)return;
+    if(this.mode!=='playing'||this.paused||this.orientationBlocked||this.dialogue)return;
     dt=Math.min(dt,.05);this.elapsed+=dt;
     if(this.elapsed>=this.settings.sessionSeconds){this.elapsed=this.settings.sessionSeconds;this.finish();return;}
     if(this.elapsed>=this.nextTechnical){this.spawnEvent('microphone');this.nextTechnical=this.elapsed+Math.max(this.settings.minimumInterval,this.settings.eventInterval-this.elapsed/25);}
@@ -235,7 +239,7 @@ export class Game {
     this.maxMood=Math.max(this.maxMood,this.mood);this.player.gesture=Math.max(0,this.player.gesture-dt);
     if(this.repair){
       this.player.moving=false;this.repair.elapsed+=dt;
-      if(this.repair.elapsed>=this.repair.duration){const {event,objectId}=this.repair;this.repair=null;event.checked.push(objectId);if(objectId===event.cause)this.solve(event);else this.notice(this.pick('notHere'));}
+      if(this.repair.elapsed>=this.repair.duration){const {event,objectId}=this.repair;this.repair=null;event.checked.push(objectId);if(objectId===event.cause)this.solve(event);else this.notice('Контакт исправен. Проверь дальше.');}
     }else{
       let dx=input.x||0,dy=input.y||0;const length=Math.hypot(dx,dy)||1;
       if(dx||dy)this.player.instrument=null;
@@ -252,13 +256,13 @@ export class Game {
       for(const other of this.npcs){const d=distance(npc,other);if(other!==npc&&other.visible&&d>0&&d<35)moveBody(npc,(npc.x-other.x)/d*dt*24,(npc.y-other.y)/d*dt*24);}
     }
     if(this.elapsed>=this.nextSpeech){
-      this.nextSpeech=this.elapsed+6;
+      this.nextSpeech=this.elapsed+16;
       const available=this.npcs.filter(n=>n.visible&&!['hysterical','sad','waiting_in_line'].includes(n.state));
-      if(available.length){const n=available[this.speechCursor++%available.length];this.bubble(n,this.pick('greeting',n.id),5.5);}
+      if(available.length){const n=available[this.speechCursor++%available.length];this.bubble(n,this.pick('short',n.id));}
     }
     if(this.elapsed>=this.nextAmbient){
       this.nextAmbient=this.elapsed+this.settings.ambientInterval;
-      const line=this.pick('ambient');if(!this.toast||this.elapsed>this.toast.until)this.notice(line);
+      // Ambient jokes are spoken occasionally by characters, never as pop-ups.
     }
   }
   updateNpc(dt,npc=this.npc){
@@ -267,12 +271,12 @@ export class Game {
       // Do not materialize on top of someone still standing in the entrance.
       if(this.npcs.some(n=>n!==npc&&n.visible&&distance(n,{x:1100,y:950})<38))return;
       Object.assign(npc,{x:1100,y:950,visible:true,state:'arriving',direction:'up',path:[],repath:0});
-      this.bubble(npc,this.pick('arrival',npc.id));this.notice(npc.name+' заходит в BGD');
+      // Friends enter naturally without covering the room with arrival messages.
     }
     if(!npc.visible)return;
     if(npc.state==='hysterical'){
       npc.moving=false;
-      if(this.elapsed>=npc.shoutAt){const line=this.pick('samatShout');this.bubble(npc,line,4);npc.shoutAt=this.elapsed+5.8;this.signals.push({type:'shout',text:line});}
+      if(this.elapsed>=npc.shoutAt){const line='Мне нужно в реанимационную!';if(this.bubble(npc,line))this.signals.push({type:'shout',text:line.toUpperCase()});npc.shoutAt=this.elapsed+16;}
       return;
     }
     if(npc.state==='sad'){npc.moving=false;return;}
@@ -286,7 +290,7 @@ export class Game {
       if(ticket.activated){
         target=this.queuePosition(index);npc.state='waiting_in_line';
         const event=this.events.find(e=>e.id===ticket.eventId);if(event)event.phase='queued';
-        if(distance(npc,target)<9){npc.moving=false;npc.direction='left';if(!npc.bubble||this.elapsed>npc.bubble.until+7)this.bubble(npc,this.pick('queue'));return;}
+        if(distance(npc,target)<9){npc.moving=false;npc.direction='left';if(!npc.bubble||this.elapsed>npc.bubble.until+7)this.bubble(npc,'Я за вами.');return;}
       }else{
         npc.state=ticket.eventId?'following_albert':'following_queue';
         const ahead=this.roomQueue.slice(0,index).reverse().find(t=>t.groupId===ticket.groupId);
@@ -318,11 +322,11 @@ export class Game {
       }
       if(npc.id==='tema'&&this.elapsed>=npc.danceAt&&['idle','walking','playing_instrument','going_to_instrument'].includes(npc.state)){
         if(distance(npc,{x:1080,y:480})>12){npc.state='going_to_dance';npc.instrument=null;target={x:1080,y:480};}
-        else{npc.state='dancing';npc.danceStarted=this.elapsed;npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.instrument=null;this.bubble(npc,this.pick('dance'));return;}
+        else{npc.state='dancing';npc.danceStarted=this.elapsed;npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.instrument=null;this.bubble(npc,'Ловите вращение!');return;}
       }
       if(npc.state==='going_to_dance'){
         target={x:1080,y:480};speed=125;
-        if(distance(npc,target)<12){npc.state='dancing';npc.danceStarted=this.elapsed;npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.moving=false;this.bubble(npc,this.pick('dance'));return;}
+        if(distance(npc,target)<12){npc.state='dancing';npc.danceStarted=this.elapsed;npc.danceUntil=this.elapsed+this.settings.danceSeconds;npc.moving=false;this.bubble(npc,'Ловите вращение!');return;}
       }else{
         if(npc.state==='playing_instrument'){
           npc.moving=false;if(this.elapsed<npc.playUntil)return;

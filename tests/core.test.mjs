@@ -135,8 +135,21 @@ test('David repeatedly drinks at the table; Nikita carries whisky and stops to s
  }
  assert.equal(seen.size,2);for(const id of seen){assert.ok(g.person(id).drinkCount>=2,id);assert.equal(g.person(id).instrument,null);}
 });
-test('periodic speech reaches all idle friends and freezes on pause',()=>{
- const g=active(),seen=new Set();
- for(let i=0;i<4000;i++){g.update(.025);for(const n of g.npcs)if(n.bubble?.until>g.elapsed)seen.add(n.id);}
- assert.equal(seen.size,10);g.togglePause();const before=g.elapsed;tick(g,10);assert.equal(g.elapsed,before);
+test('speech uses one shared slot with long silent intervals; arrivals and returns do not create popups',()=>{
+ const g=active();assert.equal(g.toast,null);
+ assert.ok(g.bubble(g.npc,'Привет!'));assert.equal(g.bubble(g.person('nikita'),'Ещё реплика'),false);
+ tick(g,4);assert.ok(g.npcs.every(n=>!n.bubble||n.bubble.until<=g.elapsed));
+ assert.equal(g.bubble(g.person('katya'),'Ещё реплика'),false);
+ const emissions=[];let previous=null;
+ for(let i=0;i<6400;i++){g.update(.025);const live=g.npcs.filter(n=>n.bubble?.until>g.elapsed);assert.ok(live.length<=1);const b=live[0]?.bubble;if(b&&b!==previous){emissions.push(g.elapsed);previous=b;}}
+ assert.ok(emissions.length>=3&&emissions.length<=11);
+ for(let i=1;i<emissions.length;i++)assert.ok(emissions[i]-emissions[i-1]>=15.95);
+ const h=active();h.rewardVisit(h.npc);assert.equal(h.toast,null);
+ const arriving=new Game({firstEventAt:999,firstSadAt:999});arriving.start();tick(arriving,10);assert.equal(arriving.toast,null);
+});
+test('portrait orientation freezes the shift and interactions without changing manual pause',()=>{
+ const g=active();g.spawnEvent('comfort');Object.assign(g.player,{x:g.npc.x+10,y:g.npc.y});g.orientationBlocked=true;
+ const before={...g.player};tick(g,5,{x:1});g.interact();assert.equal(g.elapsed,0);assert.equal(g.dialogue,null);assert.deepEqual(g.player,before);
+ g.orientationBlocked=false;tick(g,.1,{x:1});assert.ok(g.elapsed>0);
+ g.paused=true;g.orientationBlocked=true;g.orientationBlocked=false;tick(g,1);assert.equal(g.paused,true);
 });
