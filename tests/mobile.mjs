@@ -10,7 +10,7 @@ try{
   // Deterministic viewport sizes also exercise browsers that reject fullscreen.
   await page.addInitScript(()=>{Element.prototype.requestFullscreen=function(){window.fullscreenRequested=true;return Promise.reject(new DOMException('Unavailable in this test','NotAllowedError'));};});
   page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
-  await page.goto(base+'?debug=1',{waitUntil:'domcontentloaded',timeout:60000});await page.waitForFunction(()=>window.__bgd,{timeout:60000});
+  await page.goto(base+'?debug=1',{waitUntil:'domcontentloaded',timeout:60000});await page.waitForFunction(()=>window.__bgd,null,{timeout:90000});
   if(phone){assert.ok(await page.locator('#rotate-screen').isVisible());await page.setViewportSize({width,height});await page.waitForFunction(()=>!window.__bgd.game.orientationBlocked);}
   await page.locator('#start').click();assert.ok(await page.evaluate(()=>window.fullscreenRequested));
   await page.evaluate(()=>{const g=window.__bgd.game;Object.assign(g.settings,{staggerArrivals:false,firstEventAt:999,firstSadAt:999});g.start();Object.assign(g.player,{x:1000,y:550});g.elapsed=60;
@@ -58,7 +58,7 @@ try{
   assert.deepEqual(errors,[]);await page.close();console.log(`PASS ${width}x${height}: viewport fill, fullscreen fallback, camera, HUD${phone?', floating stick, multi-touch action, cancel, rotation':''}`);
  }
  // Real browser fullscreen uses a real user click; Escape must safely pause.
- const page=await browser.newPage({viewport:{width:1280,height:800}});page.on('pageerror',e=>errors.push(e.message));await page.goto(base+'?debug=1',{timeout:60000});await page.waitForFunction(()=>window.__bgd,{timeout:60000});await page.locator('#start').click();await page.waitForFunction(()=>!!document.fullscreenElement);
+ const page=await browser.newPage({viewport:{width:1280,height:800}});page.on('pageerror',e=>errors.push(e.message));await page.goto(base+'?debug=1',{timeout:60000});await page.waitForFunction(()=>window.__bgd,null,{timeout:90000});await page.locator('#start').click();await page.waitForFunction(()=>!!document.fullscreenElement);
  await page.evaluate(()=>document.exitFullscreen());await page.waitForFunction(()=>window.__bgd.game.paused);await page.locator('#resume').click();await page.locator('#fullscreen').click();await page.waitForFunction(()=>!!document.fullscreenElement);await page.close();
  assert.deepEqual(errors,[]);console.log('PASS real fullscreen enter/exit/re-enter; no JS/HTTP errors');
 }finally{await browser.close();}

@@ -1,8 +1,8 @@
-import {floatingJoystick} from './controls.js?v=0.7.0';
-import {Game} from './core.js?v=0.7.0';
-import {SETTINGS,CHARACTERS} from './content.js?v=0.7.0';
-import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js?v=0.7.0';
-import {Sound} from './audio.js?v=0.7.0';
+import {floatingJoystick} from './controls.js?v=0.7.0-r2';
+import {Game} from './core.js?v=0.7.0-r2';
+import {SETTINGS,CHARACTERS} from './content.js?v=0.7.0-r2';
+import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js?v=0.7.0-r2';
+import {Sound} from './audio.js?v=0.7.0-r2';
 const $=id=>document.getElementById(id),game=new Game(),sound=new Sound(),keys=new Set();
 let joystickController;
 let renderer,atlas,last=0,lastUi=0,shownMode='',dialogueRef=null,stick={x:0,y:0};
@@ -82,7 +82,7 @@ function frame(t){const dt=last?Math.min((t-last)/1000,.05):0;last=t;
   if(t-lastUi>70){updateUI();lastUi=t;}requestAnimationFrame(frame);
 }
 try {
-  const [background,characters,crew,lounge,friends,nikitaDrink,davidDrink]=await Promise.all([loadImage('./assets/studio.png'),loadImage('./assets/characters-key.png'),loadImage('./assets/crew-key.png'),loadImage('./assets/lounge-key.png'),loadImage('./assets/friends-realistic-key.png'),loadImage('./assets/nikita-drink-key.png'),loadImage('./assets/david-drink-key.png')]);
+  const [background,characters,crew,lounge,friends,nikitaDrink,davidDrink]=await Promise.all([loadImage('./assets/studio.webp'),loadImage('./assets/characters-key.webp'),loadImage('./assets/crew-key.webp'),loadImage('./assets/lounge-key.webp'),loadImage('./assets/friends-realistic-key.webp'),loadImage('./assets/nikita-drink-key.webp'),loadImage('./assets/david-drink-key.webp')]);
   atlas=keyedAtlas(characters);renderer=new Renderer($('world'),background,atlas);renderer.addCrew(keyedAtlas(crew));new ResizeObserver(()=>renderer.resize()).observe($('world'));renderer.resize();portrait($('portrait'),0);
   renderer.addLounge(keyedAtlas(lounge));renderer.addFriends(keyedAtlas(friends,'magenta'));renderer.addDrink('nikita',keyedAtlas(nikitaDrink,'magenta'));renderer.addDrink('david',keyedAtlas(davidDrink,'magenta'));
   $('start').disabled=false;$('start').querySelector('span').textContent='НАЧАТЬ СМЕНУ';requestAnimationFrame(frame);
