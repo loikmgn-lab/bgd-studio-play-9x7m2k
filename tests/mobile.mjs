@@ -40,6 +40,14 @@ try{
    assert.deepEqual(await page.evaluate(()=>window.__bgd.getInput()),{x:0,y:0});await send('touchEnd',[]);await page.locator('#dialogue-next').click();
    const next={x:width*.37,y:height*.55,id:3};await send('touchStart',[next]);const second=await page.locator('#joystick').boundingBox();assert.ok(Math.abs(second.x+second.width/2-next.x)<2);
    await send('touchMove',[{...next,x:next.x+25}]);await send('touchCancel',[]);assert.deepEqual(await page.evaluate(()=>window.__bgd.getInput()),{x:0,y:0});assert.equal(await page.locator('#joystick').isVisible(),false);
+   // The pair game uses its own touch controls and survives rotation mid-drop.
+   await page.evaluate(()=>{const g=window.__bgd.game;g.beginPair();Object.assign(g.player,{x:195,y:747});Object.assign(g.person('anfisa'),{x:220,y:747});g.updatePair();});await page.waitForTimeout(120);
+   assert.ok(await page.locator('#pencil-screen').isVisible());
+   const right=await page.locator('#pencil-right').boundingBox(),drop=await page.locator('#pencil-drop').boundingBox(),finger={x:right.x+right.width/2,y:right.y+right.height/2,id:7};
+   const anchor=await page.evaluate(()=>window.__bgd.game.minigame.anchor);await send('touchStart',[finger]);await page.waitForTimeout(150);await send('touchStart',[finger,{x:drop.x+drop.width/2,y:drop.y+drop.height/2,id:8}]);await send('touchEnd',[]);
+   assert.ok((await page.evaluate(()=>window.__bgd.game.minigame.anchor))>anchor+10);assert.equal(await page.evaluate(()=>window.__bgd.game.minigame.attempts),1);
+   await page.setViewportSize({width:height,height:width});await page.waitForFunction(()=>window.__bgd.game.orientationBlocked);const miniTime=await page.evaluate(()=>window.__bgd.game.minigame.time);await page.waitForTimeout(150);assert.equal(await page.evaluate(()=>window.__bgd.game.minigame.time),miniTime);
+   await page.setViewportSize({width,height});await page.waitForFunction(()=>!window.__bgd.game.orientationBlocked);await page.waitForTimeout(120);assert.ok(await page.locator('#pencil-screen').isVisible());await page.screenshot({path:`artifacts/v08-touch-pencil-${width}.png`});await page.tap('#pencil-exit');assert.equal(await page.evaluate(()=>window.__bgd.game.minigame),null);
    await page.setViewportSize({width:height,height:width});await page.waitForFunction(()=>window.__bgd.game.orientationBlocked);assert.ok(await page.locator('#rotate-screen').isVisible());const frozen=await page.evaluate(()=>window.__bgd.game.elapsed);await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>window.__bgd.game.elapsed),frozen);
    await page.setViewportSize({width,height});await page.waitForFunction(()=>!window.__bgd.game.orientationBlocked);await page.waitForTimeout(100);assert.ok((await page.evaluate(()=>window.__bgd.game.elapsed))>frozen);
   }else{

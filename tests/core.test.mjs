@@ -59,7 +59,7 @@ test('NPC reaches and plays three instruments, then repeats; sadness interrupts 
   assert.ok(g.npc.instrumentIndex>=4);assert.ok(g.spawnEvent('comfort'));assert.equal(g.npc.instrument,null);assert.equal(g.npc.state,'sad');
 });
 test('full crew spawns on reachable floor and instruments have exclusive reservations',()=>{
-  const g=active();assert.equal(g.npcs.length,10);
+  const g=active();assert.equal(g.npcs.length,12);
   for(const n of g.npcs){assert.ok(canStand(n.x,n.y),n.name);assert.ok(findPath(WORLD.spawn,n).length,n.name);}
   const seen=new Set();
   for(let i=0;i<3200;i++){
@@ -67,7 +67,7 @@ test('full crew spawns on reachable floor and instruments have exclusive reserva
     assert.equal(new Set(reserved).size,reserved.length,'instrument double-booked');
     for(const n of g.npcs){assert.ok(canStand(n.x,n.y),n.name+' inside obstacle');if(n.state==='playing_instrument')seen.add(n.id);}
   }
-  assert.equal(seen.size,8,'each musician gets a turn');
+  assert.equal(seen.size,9,'each musician gets a turn');
 });
 test('each crew member responds under their own name',()=>{
   const g=active();
@@ -88,15 +88,15 @@ test('restart resets statistics, NPC visibility, dialogue and events',()=>{
   const g=active();g.stats.people=5;g.npc.visible=false;g.say('Лоик','Тест');g.start();assert.equal(g.stats.people,0);assert.equal(g.npc.visible,true);assert.equal(g.dialogue,null);assert.equal(g.events.length,0);
 });
 test('crew arrives one by one from the entrance and every member eventually arrives',()=>{
-  const g=new Game({firstEventAt:999,firstSadAt:999});g.start();assert.ok(g.npcs.every(n=>!n.visible));
-  const seen=new Set();for(let i=0;i<2400;i++){g.update(.025);for(const n of g.npcs)if(n.visible&&!seen.has(n.id)){assert.ok(n.x>1050&&n.y>910,'arrival must use entrance');seen.add(n.id);}}
-  assert.equal(seen.size,10);assert.ok(g.npcs.every(n=>canStand(n.x,n.y)));
+  const g=new Game({firstEventAt:999,firstSadAt:999});g.start();assert.ok(g.npcs.filter(n=>n.id!=='anfisa').every(n=>!n.visible));assert.ok(g.person('anfisa').visible);
+  const seen=new Set(['anfisa']);for(let i=0;i<2400;i++){g.update(.025);for(const n of g.npcs)if(n.visible&&!seen.has(n.id)){assert.ok(n.x>1050&&n.y>910,'arrival must use entrance');seen.add(n.id);}}
+  assert.equal(seen.size,12);assert.ok(g.npcs.every(n=>canStand(n.x,n.y)));
 });
 test('Samat lies still and shouts; escort stops hysteria; Tema periodically dances',()=>{
   const g=active(),s=g.person('samat');g.spawnEvent('comfort','samat');tick(g,.1);
   assert.equal(s.state,'hysterical');assert.ok(g.signals.some(s=>s.type==='shout'&&/РЕАНИМАЦИОННУЮ/.test(s.text)));
   g.beginEscort(g.events[0]);assert.equal(s.state,'following_albert');assert.ok(g.signals.some(s=>s.type==='stop-speech'));
-  const seen=new Set();for(let i=0;i<2400;i++){g.update(.025);seen.add(g.person('tema').state);}assert.ok(seen.has('dancing'));
+  const seen=new Set(['anfisa']);for(let i=0;i<2400;i++){g.update(.025);seen.add(g.person('tema').state);}assert.ok(seen.has('dancing'));
 });
 test('three companions queue and visit strictly one at a time with happy returns',()=>{
   const g=active();g.settings.queueCompanions=3;g.settings.secretSeconds=1;
@@ -181,4 +181,45 @@ test('Erbak declines only at his turn, walks away and allows the next visitor wi
  tick(g,.5);assert.ok(g.roomQueue.some(t=>t.npcId==='erbak'));assert.notEqual(erbak.state,'leaving_queue');
  tick(g,2.5);assert.equal(erbak.state,'leaving_queue');assert.ok(erbak.visible);assert.match(erbak.bubble.text,/аскеза|искушать/);assert.equal(g.events.includes(event),false);assert.ok(!g.roomQueue.some(t=>t.npcId==='erbak'));
  const visited=g.stats.secretVisits;assert.equal(visited,1);tick(g,8);assert.equal(g.stats.secretVisits,2);assert.ok(erbak.x>300);assert.ok(erbak.visible);
+});
+
+test('Anfisa is available from start; escort is repeatable and independent of event capacity',()=>{
+ const g=new Game();g.start();const a=g.person('anfisa');assert.ok(a.visible);g.events=Array.from({length:3},(_,id)=>({id,type:'microphone',phase:'checking',checked:[]}));
+ Object.assign(g.player,{x:a.x+15,y:a.y});g.interact();assert.equal(g.dialogue.speaker,'Анфиса');g.closeDialogue();assert.equal(a.state,'following_pair');
+ g.beginPair();assert.equal(g.roomQueue.length,0);assert.equal(g.spawnEvent('comfort','anfisa'),false);
+ Object.assign(g.player,WORLD.curtain);for(let i=0;i<800&&!g.minigame;i++)g.update(.025);
+ assert.ok(g.minigame);assert.equal(a.visible,false);assert.equal(g.player.visible,false);assert.equal(g.roomOccupant,null);
+ g.leavePair();assert.ok(a.visible&&g.player.visible);assert.equal(g.stats.secretVisits,0);g.beginPair();assert.equal(a.state,'following_pair');
+});
+test('pair waits for existing visitor, enters together, and resumes queued visitors afterwards',()=>{
+ const g=active();g.settings.secretSeconds=1;g.spawnEvent('comfort','loik');g.beginEscort(g.events[0]);Object.assign(g.npc,WORLD.curtain);g.roomQueue[0].activated=true;g.updateRoom();
+ const a=g.person('anfisa');g.beginPair();Object.assign(g.player,WORLD.curtain);Object.assign(a,{x:220,y:747});tick(g,.4);assert.equal(g.minigame,null);assert.ok(g.player.visible&&a.visible);assert.equal(g.npc.visible,false);
+ tick(g,1);assert.ok(g.minigame);assert.ok(g.npc.visible);assert.equal(g.stats.secretVisits,1);
+ g.leavePair(true);assert.equal(g.stats.secretVisits,2);assert.equal(g.stats.pencilWins,1);assert.ok(a.dizzyUntil>g.elapsed&&a.state==='happy');assert.ok(g.player.happyUntil>g.elapsed);assert.ok(canStand(a.x,a.y)&&canStand(g.player.x,g.player.y));
+ g.leavePair(true);assert.equal(g.stats.pencilWins,1);g.spawnEvent('comfort','vovan');g.beginEscort(g.events.find(e=>e.npcId==='vovan'));Object.assign(g.player,WORLD.curtain);tick(g,12);assert.equal(g.stats.secretVisits,3);
+});
+test('pencil game misses, scores three timed hits, freezes studio, supports pause and restart',async()=>{
+ const {pencilTip}=await import('../public/minigame.js');const g=active();g.beginPair();Object.assign(g.player,WORLD.curtain);Object.assign(g.person('anfisa'),WORLD.curtain);g.updatePair();
+ const elapsed=g.elapsed;g.minigame.anchor=105;g.dropPencil();g.dropPencil();assert.equal(g.minigame.attempts,1);tick(g,1.2);assert.equal(g.minigame.score,0);assert.match(g.minigame.feedback,/мимо/);assert.equal(g.elapsed,elapsed);
+ g.togglePause();const time=g.minigame.time;tick(g,2);g.dropPencil();assert.equal(g.minigame.time,time);assert.equal(g.minigame.drop,null);g.togglePause();
+ g.orientationBlocked=true;tick(g,1);assert.equal(g.minigame.time,time);g.orientationBlocked=false;
+ for(let hit=0;hit<3;hit++){const m=g.minigame;m.anchor+=m.target-pencilTip(m).x;g.dropPencil();tick(g,1.2);}
+ assert.equal(g.minigame,null);assert.equal(g.stats.pencilWins,1);assert.ok(g.player.visible&&g.person('anfisa').visible);
+ g.beginPair();g.start();assert.equal(g.pair,null);assert.equal(g.minigame,null);assert.equal(g.stats.pencilWins,0);assert.ok(g.player.visible);
+});
+test('end of shift cannot strand Albert or Anfisa behind the curtain',()=>{
+ const g=active();g.beginPair();Object.assign(g.player,WORLD.curtain);Object.assign(g.person('anfisa'),WORLD.curtain);g.updatePair();g.finish();assert.equal(g.mode,'finished');assert.ok(g.player.visible&&g.person('anfisa').visible);assert.equal(g.minigame,null);assert.equal(g.pair,null);
+});
+test('nearby characters speak without E, no rapid repeated speech, band members respond',()=>{
+ const g=active();for(const n of g.npcs)Object.assign(n,{wanderAt:999,instrumentAt:999,drinkAt:999,danceAt:999});
+ const alex=g.person('alex');Object.assign(g.player,{x:alex.x,y:alex.y+50});g.updateApproach();assert.ok(alex.bubble);assert.equal(g.dialogue,null);const first=alex.bubble;tick(g,6);assert.ok(!alex.bubble||alex.bubble===first);
+ const band=g.guests[0];Object.assign(g.player,{x:band.x,y:310});g.interact();assert.equal(g.dialogue.speaker,band.name);g.closeDialogue();tick(g,4);assert.ok(band.bubble);assert.ok(g.speakers().filter(n=>n.bubble?.until>g.elapsed).length<=1);
+});
+test('Nikita stays cheerful, reacts to Albert, and never joins either curtain activity',()=>{
+ const g=active(),n=g.person('nikita');assert.ok(n.cheerful);Object.assign(g.player,{x:n.x+15,y:n.y});g.interact();assert.ok(n.cheerUntil>g.elapsed);assert.match(g.dialogue.text,/вечер|радость|Улыбка|Жизнь/);g.closeDialogue();g.beginPair();assert.equal(g.person('anfisa').state,'following_pair');assert.notEqual(n.state,'following_pair');assert.equal(g.spawnEvent('comfort','nikita'),false);
+});
+
+test('Albert visibly finishes approaching the curtain before the pair disappears',()=>{
+ const g=active();g.beginPair();Object.assign(g.player,{x:265,y:650});Object.assign(g.person('anfisa'),{x:220,y:735});g.updatePair();assert.equal(g.minigame,null);assert.ok(g.player.visible);
+ tick(g,1);assert.ok(g.minigame);assert.ok(distance(g.player,WORLD.curtain)<38);assert.equal(g.person('anfisa').visible,false);
 });

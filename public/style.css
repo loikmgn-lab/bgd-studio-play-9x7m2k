@@ -67,3 +67,19 @@ html,body{overscroll-behavior:none;width:100%;height:100%;min-width:0}
 }
 @media(max-width:600px) and (orientation:landscape){.mood-card{width:138px}.mood-label{font-size:9px}.shift-clock{left:154px}.start-copy h1{font-size:37px}.start-copy h2{font-size:23px}.start-copy .eyebrow{display:none}}
 .mood-label{white-space:nowrap}
+/* The party game keeps the closed curtain visible in the studio around its card. */
+.pencil-overlay{z-index:22;display:flex;align-items:center;justify-content:flex-end;padding:18px 4%;background:#090b0d55}
+.pencil-card{width:580px;max-width:96%;padding:22px;background:#19171ef5;border:1px solid #efb76455;border-radius:16px;box-shadow:0 20px 80px #0008}
+.pencil-heading{display:flex;justify-content:space-between;align-items:center;gap:15px}.pencil-heading h2{font-size:29px;margin-top:8px}.pencil-heading .icon-button{width:44px;height:44px;flex-shrink:0}
+.pencil-instructions{color:#d0c7c0;font-size:13px;line-height:1.5;margin:12px 0}
+#pencil-canvas{display:block;width:100%;height:auto;border:1px solid #ffffff12;border-radius:10px}
+.pencil-bottom{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:48px;font-size:13px}.pencil-bottom p{margin:8px 0;color:#e4d8c4}#pencil-score{white-space:nowrap;font-weight:bold;color:var(--gold)}
+.pencil-actions{display:flex;gap:10px}.pencil-actions button{height:48px;min-width:58px;border:1px solid #ffffff24;border-radius:8px;color:var(--paper);background:#302b35;touch-action:none;font-size:22px}.pencil-actions #pencil-drop{flex:1;background:var(--gold);color:#241c17;font-size:13px;font-weight:bold;letter-spacing:1px}.pencil-actions kbd{margin-left:12px;color:#241c17;border-color:#241c1733}.pencil-actions button:disabled{opacity:.6}
+#pause-screen,#end-screen{z-index:24}
+@media(max-height:600px) and (orientation:landscape){
+ .pencil-overlay{padding:8px 12px}.pencil-card{width:510px;max-height:calc(100dvh - 16px);padding:12px;display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:6px 12px;overflow-y:auto}
+ .pencil-heading{grid-column:1/-1}.pencil-heading h2{font-size:21px;margin:3px 0}.pencil-heading .eyebrow{font-size:8px;letter-spacing:1.4px}.pencil-heading .icon-button{width:36px;height:36px}
+ #pencil-canvas{grid-column:1;grid-row:2/5;align-self:center}.pencil-instructions{grid-column:2;grid-row:2;font-size:11px;line-height:1.4;margin:0}
+ .pencil-bottom{grid-column:2;grid-row:3;min-height:32px;font-size:11px}.pencil-bottom p{margin:0}.pencil-actions{grid-column:2;grid-row:4;flex-wrap:wrap;gap:5px}.pencil-actions button{height:40px;min-width:40px;flex:1}.pencil-actions #pencil-drop{order:-1;flex-basis:100%;font-size:11px}.pencil-actions kbd{display:none}
+}
+@media(max-width:650px) and (orientation:landscape){.pencil-card{max-width:calc(100% - 88px);grid-template-columns:minmax(0,1fr) 145px;padding:10px;gap:6px 9px}.pencil-overlay{padding-right:8px}.pencil-instructions{font-size:10px}}

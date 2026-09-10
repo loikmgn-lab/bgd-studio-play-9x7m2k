@@ -9,7 +9,8 @@ const base=process.env.BGD_URL||'http://127.0.0.1:4178/bgd/';
 try{
   await page.goto(base+'?debug=1');await page.waitForFunction(()=>window.__bgd,{timeout:30000});
   await page.screenshot({path:'artifacts/start-desktop.png'});console.log('Start loaded; screenshot saved.');
-  if(process.argv.includes('--motion')){
+  if(process.argv.includes('--cast')){await (await import('./cast.mjs')).castQA(page,errors);}
+  else if(process.argv.includes('--motion')){
     await page.click('#start');
     await page.evaluate(()=>{
       const {game,renderer}=window.__bgd;game.paused=true;

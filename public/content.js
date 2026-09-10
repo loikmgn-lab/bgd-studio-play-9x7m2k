@@ -51,6 +51,8 @@ export const CHARACTERS = [
   {id:'nikita',name:'Никита',active:true,atlasKey:'friends',atlasRow:2,roomAllowed:false,drink:'whisky',spawn:{x:1210,y:530}},
   {id:'david',name:'Давид',active:true,atlasKey:'friends',atlasRow:3,drink:'table',spawn:{x:470,y:370}},
   { id: 'katya', name: 'Катя', active: true, atlasKey:'crew', atlasRow:4, spawn:{x:1178,y:370} },
+  { id:'alex', name:'Alex Med', active:true, atlasKey:'newcomers', atlasRow:0, spawn:{x:960,y:345} },
+  { id:'anfisa', name:'Анфиса', active:true, atlasKey:'newcomers', atlasRow:1, roomAllowed:false, alwaysPresent:true, spawn:{x:370,y:540}, wander:[{x:370,y:540},{x:420,y:480},{x:870,y:400}] },
 ];
 export const OBJECTS = [
   { id: 'microphone', name: 'Микрофон', x: 477, y: 573, icon: '!', marker: {x:485,y:551} },
@@ -68,6 +70,12 @@ export const INSTRUMENTS = [
 ];
 export const SOCIAL_ORDER=['samat','loik','vovan','katya','tema','erbak','username','david'];
 export const LOUNGE_GUESTS=[{id:'guest-a',x:295,y:255,frame:0,phase:0},{id:'guest-b',x:414,y:255,frame:2,phase:3.5}];
+export const BAND_GUESTS=[
+  {id:'james',name:'Джеймс',x:1048,y:271,atlasRow:0,frame:0},
+  {id:'lars',name:'Ларс',x:1121,y:271,atlasRow:0,frame:1},
+  {id:'kirk',name:'Кирк',x:1194,y:271,atlasRow:0,frame:2},
+  {id:'robert',name:'Роберт',x:1267,y:271,atlasRow:0,frame:3},
+];
 export const DIALOGUES = {
   greeting: 'Всё спокойно. Пока можно просто освоиться.',
   microphone: 'Микрофон молчит. Проверю кабель, усилитель и пульт.',

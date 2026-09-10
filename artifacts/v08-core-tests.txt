@@ -1,0 +1,224 @@
+
+> bgd-alberts-day@0.8.0 test
+> node --test tests/core.test.mjs
+
+TAP version 13
+# Subtest: all interaction positions, entrance and curtain exit are reachable from spawn
+ok 1 - all interaction positions, entrance and curtain exit are reachable from spawn
+  ---
+  duration_ms: 123.652946
+  type: 'test'
+  ...
+# Subtest: walls, couch, drums, desk, tea equipment and speakers block travel
+ok 2 - walls, couch, drums, desk, tea equipment and speakers block travel
+  ---
+  duration_ms: 1.833594
+  type: 'test'
+  ...
+# Subtest: podium allows walking on its clear edge; drum kit remains solid
+ok 3 - podium allows walking on its clear edge; drum kit remains solid
+  ---
+  duration_ms: 1.264269
+  type: 'test'
+  ...
+# Subtest: diagonal movement is normalized; Shift is faster
+ok 4 - diagonal movement is normalized; Shift is faster
+  ---
+  duration_ms: 13.770887
+  type: 'test'
+  ...
+# Subtest: repair requires E at microphone, dialogue, diagnosis, actual timed repair
+ok 5 - repair requires E at microphone, dialogue, diagnosis, actual timed repair
+  ---
+  duration_ms: 29.127434
+  type: 'test'
+  ...
+# Subtest: all three randomized causes are solvable
+ok 6 - all three randomized causes are solvable
+  ---
+  duration_ms: 41.177907
+  type: 'test'
+  ...
+# Subtest: escort routes around furniture; enters only nearby; returns happy and counts once
+ok 7 - escort routes around furniture; enters only nearby; returns happy and counts once
+  ---
+  duration_ms: 365.39867
+  type: 'test'
+  ...
+# Subtest: escort automatically enters from broad curtain area without any extra E
+ok 8 - escort automatically enters from broad curtain area without any extra E
+  ---
+  duration_ms: 130.100537
+  type: 'test'
+  ...
+# Subtest: NPC reaches and plays three instruments, then repeats; sadness interrupts music
+ok 9 - NPC reaches and plays three instruments, then repeats; sadness interrupts music
+  ---
+  duration_ms: 408.014802
+  type: 'test'
+  ...
+# Subtest: full crew spawns on reachable floor and instruments have exclusive reservations
+ok 10 - full crew spawns on reachable floor and instruments have exclusive reservations
+  ---
+  duration_ms: 3371.349566
+  type: 'test'
+  ...
+# Subtest: each crew member responds under their own name
+ok 11 - each crew member responds under their own name
+  ---
+  duration_ms: 34.836718
+  type: 'test'
+  ...
+# Subtest: Albert can play an available instrument and movement immediately releases it
+ok 12 - Albert can play an available instrument and movement immediately releases it
+  ---
+  duration_ms: 1.41134
+  type: 'test'
+  ...
+# Subtest: events repeat, do not duplicate active types, and mood never ends game
+ok 13 - events repeat, do not duplicate active types, and mood never ends game
+  ---
+  duration_ms: 4745.950409
+  type: 'test'
+  ...
+# Subtest: dialogue and pause freeze session and secret timer; finish freezes gameplay
+ok 14 - dialogue and pause freeze session and secret timer; finish freezes gameplay
+  ---
+  duration_ms: 4.872295
+  type: 'test'
+  ...
+# Subtest: restart resets statistics, NPC visibility, dialogue and events
+ok 15 - restart resets statistics, NPC visibility, dialogue and events
+  ---
+  duration_ms: 1.293833
+  type: 'test'
+  ...
+# Subtest: crew arrives one by one from the entrance and every member eventually arrives
+ok 16 - crew arrives one by one from the entrance and every member eventually arrives
+  ---
+  duration_ms: 739.117944
+  type: 'test'
+  ...
+# Subtest: Samat lies still and shouts; escort stops hysteria; Tema periodically dances
+ok 17 - Samat lies still and shouts; escort stops hysteria; Tema periodically dances
+  ---
+  duration_ms: 917.069501
+  type: 'test'
+  ...
+# Subtest: three companions queue and visit strictly one at a time with happy returns
+ok 18 - three companions queue and visit strictly one at a time with happy returns
+  ---
+  duration_ms: 823.541284
+  type: 'test'
+  ...
+# Subtest: all real NPCs can receive a room event without duplicate tickets
+ok 19 - all real NPCs can receive a room event without duplicate tickets
+  ---
+  duration_ms: 5.411058
+  type: 'test'
+  ...
+# Subtest: both guitar positions and six queue positions are reachable, banter varies
+ok 20 - both guitar positions and six queue positions are reachable, banter varies
+  ---
+  duration_ms: 750.153204
+  type: 'test'
+  ...
+# Subtest: Sveta and Nikita never request or join the room; Samat stays in place
+ok 21 - Sveta and Nikita never request or join the room; Samat stays in place
+  ---
+  duration_ms: 121.295287
+  type: 'test'
+  ...
+# Subtest: David repeatedly drinks at the table; Nikita carries whisky and stops to sip
+ok 22 - David repeatedly drinks at the table; Nikita carries whisky and stops to sip
+  ---
+  duration_ms: 2993.734258
+  type: 'test'
+  ...
+# Subtest: speech uses one shared slot with long silent intervals; arrivals and returns do not create popups
+ok 23 - speech uses one shared slot with long silent intervals; arrivals and returns do not create popups
+  ---
+  duration_ms: 4121.775418
+  type: 'test'
+  ...
+# Subtest: portrait orientation freezes the shift and interactions without changing manual pause
+ok 24 - portrait orientation freezes the shift and interactions without changing manual pause
+  ---
+  duration_ms: 1.617288
+  type: 'test'
+  ...
+# Subtest: floating stick has a dead zone, analogue speed and normalized diagonals
+ok 25 - floating stick has a dead zone, analogue speed and normalized diagonals
+  ---
+  duration_ms: 3.68786
+  type: 'test'
+  ...
+# Subtest: camera fills wide screens, remains bounded and can show the whole studio
+ok 26 - camera fills wide screens, remains bounded and can show the whole studio
+  ---
+  duration_ms: 3.167921
+  type: 'test'
+  ...
+# Subtest: drinking frames lift, sip and lower as one complete body pose
+ok 27 - drinking frames lift, sip and lower as one complete body pose
+  ---
+  duration_ms: 0.745645
+  type: 'test'
+  ...
+# Subtest: Erbak declines only at his turn, walks away and allows the next visitor without a reward
+ok 28 - Erbak declines only at his turn, walks away and allows the next visitor without a reward
+  ---
+  duration_ms: 246.866997
+  type: 'test'
+  ...
+# Subtest: Anfisa is available from start; escort is repeatable and independent of event capacity
+ok 29 - Anfisa is available from start; escort is repeatable and independent of event capacity
+  ---
+  duration_ms: 5.162621
+  type: 'test'
+  ...
+# Subtest: pair waits for existing visitor, enters together, and resumes queued visitors afterwards
+ok 30 - pair waits for existing visitor, enters together, and resumes queued visitors afterwards
+  ---
+  duration_ms: 239.479782
+  type: 'test'
+  ...
+# Subtest: pencil game misses, scores three timed hits, freezes studio, supports pause and restart
+ok 31 - pencil game misses, scores three timed hits, freezes studio, supports pause and restart
+  ---
+  duration_ms: 8.008767
+  type: 'test'
+  ...
+# Subtest: end of shift cannot strand Albert or Anfisa behind the curtain
+ok 32 - end of shift cannot strand Albert or Anfisa behind the curtain
+  ---
+  duration_ms: 0.398121
+  type: 'test'
+  ...
+# Subtest: nearby characters speak without E, no rapid repeated speech, band members respond
+ok 33 - nearby characters speak without E, no rapid repeated speech, band members respond
+  ---
+  duration_ms: 34.999601
+  type: 'test'
+  ...
+# Subtest: Nikita stays cheerful, reacts to Albert, and never joins either curtain activity
+ok 34 - Nikita stays cheerful, reacts to Albert, and never joins either curtain activity
+  ---
+  duration_ms: 0.925089
+  type: 'test'
+  ...
+# Subtest: Albert visibly finishes approaching the curtain before the pair disappears
+ok 35 - Albert visibly finishes approaching the curtain before the pair disappears
+  ---
+  duration_ms: 4.206837
+  type: 'test'
+  ...
+1..35
+# tests 35
+# suites 0
+# pass 35
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 20575.656386

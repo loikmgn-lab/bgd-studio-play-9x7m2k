@@ -1,4 +1,4 @@
-import {WORLD} from './content.js?v=0.7.0-r2';
+import {WORLD} from './content.js?v=0.8.0';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function cameraTarget(width,height,body,overview=false){
   const scale=(overview?Math.min:Math.max)(width/WORLD.width,height/WORLD.height);

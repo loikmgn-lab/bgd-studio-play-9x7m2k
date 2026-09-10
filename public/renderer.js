@@ -1,6 +1,6 @@
-import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.7.0-r2';
-import {cameraTarget,drinkFrame} from './camera.js?v=0.7.0-r2';
-import { MotionAtlas } from './motion.js?v=0.7.0-r2';
+import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.8.0';
+import {cameraTarget,drinkFrame} from './camera.js?v=0.8.0';
+import { MotionAtlas } from './motion.js?v=0.8.0';
 const frames={down:0,right:1,up:2,left:3};
 const boxes=[
   [{x:108,y:7,w:211,h:476},{x:522,y:7,w:151,h:477},{x:858,y:7,w:190,h:477},{x:1214,y:7,w:164,h:477}],
@@ -41,10 +41,15 @@ export class Renderer {
   constructor(canvas,background,atlas){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.background=background;this.atlas=atlas;this.motion=new MotionAtlas(atlas,boxes);this.view={scale:1,x:0,y:0};this.debug=false;this.overview=false;this.cameraTime=null;this.drinks={};}
   addCrew(atlas){const frameBoxes=detectFrames(atlas,5);this.crew={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
   addFriends(atlas){const frameBoxes=detectFrames(atlas,4);this.friends={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
+  addNewcomers(atlas){const frameBoxes=detectFrames(atlas,2);this.newcomers={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
+  addCheer(atlas){const frameBoxes=detectFrames(atlas,1);this.cheer={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
+  addBand(atlas){this.band={atlas,boxes:detectFrames(atlas,1)};}
+  addDance(atlas){this.dance={atlas,boxes:detectFrames(atlas,3)};}
+  source(person){return this[person?.atlasKey]||{atlas:this.atlas,boxes,motion:this.motion};}
   addDrink(id,atlas){const frameBoxes=detectFrames(atlas,3);this.drinks[id]={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
   addLounge(atlas){this.lounge={atlas,boxes:detectFrames(atlas,1)};}
   portrait(canvas,person){
-    const source=person?.atlasKey==='friends'?this.friends:person?.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes},row=person?.atlasRow||0,b=source.boxes[row][0],c=canvas.getContext('2d');
+    const source=this.source(person),row=person?.atlasRow||0,b=source.boxes[row][person?.frame||0],c=canvas.getContext('2d');
     c.clearRect(0,0,canvas.width,canvas.height);c.drawImage(source.atlas,b.x+b.w*.15,b.y,b.w*.7,b.h*.31,0,0,canvas.width,canvas.height);
   }
   resize(){
@@ -67,6 +72,7 @@ export class Renderer {
     this.speechRects=[];this.bodyRects=[];
     c.setTransform(this.dpr,0,0,this.dpr,0,0);c.fillStyle='#090b0d';c.fillRect(0,0,this.width,this.height);
     c.translate(v.x,v.y);c.scale(v.scale,v.scale);c.drawImage(this.background,0,0,WORLD.width,WORLD.height);
+    if(game.roomOccupant||game.minigame)this.curtain(time+(game.minigame?.time||0));
     // Warm practical lights and BGD's blue neon breathe very subtly.
     const pulse=.025+Math.sin(time*.9)*.008;c.globalCompositeOperation='screen';
     for(const [x,y,r,color] of [[1430,510,180,'75,90,245'],[195,112,130,'255,164,51'],[510,104,115,'255,145,35']]){
@@ -74,22 +80,24 @@ export class Renderer {
     }c.globalCompositeOperation='source-over';
     if(game.player) {
       if(this.lounge)for(const guest of LOUNGE_GUESTS){const sip=(time+guest.phase)%9>6;drawFrame(c,this.lounge.atlas,0,['down','right','up','left'][guest.frame+Number(sip)],guest.x,guest.y,123,this.lounge.boxes);}
-      const entities=[{body:game.player,row:0,player:true},...game.npcs.filter(n=>n.visible).map(n=>({body:n,row:n.atlasRow,player:false}))];
-      this.bodyRects=entities.map(({body})=>{const at=this.screen(body);return {x:at.x-24*v.scale,y:at.y-132*v.scale,w:48*v.scale,h:132*v.scale};});
+      if(this.band)for(const guest of game.guests){const b=this.band.boxes[0][guest.frame],h=117,w=b.w/b.h*h;c.drawImage(this.band.atlas,b.x,b.y,b.w,b.h,guest.x-w/2,guest.y-h+Math.sin(time*2+guest.frame)*.6,w,h);}
+      const entities=[...(game.player.visible!==false?[{body:game.player,row:0,player:true}]:[]),...game.npcs.filter(n=>n.visible).map(n=>({body:n,row:n.atlasRow,player:false}))];
+      this.bodyRects=[...entities,...(game.guests||[]).map(body=>({body}))].map(({body})=>{const at=this.screen(body);return {x:at.x-24*v.scale,y:at.y-132*v.scale,w:48*v.scale,h:132*v.scale};});
       entities.sort((a,b)=>a.body.y-b.body.y);for(const item of entities)this.character(item,time,game);
       for(const target of game.targets()){
         if(target.event?.type==='comfort'&&target.event.phase==='new'){this.marker(target.x,target.y-140,'sad',time);}
         else{const point=target.marker||target;this.marker(point.x,point.y,target.id==='curtain'?'arrow':target.icon,time);}
       }
       const occupant=game.roomOccupant;
-      if(occupant){this.smoke(time,time-occupant.enteredAt);this.marker(146,715,'wait',time,(occupant.returnAt-time)/game.settings.secretSeconds);}
+      if(occupant){this.marker(146,715,'wait',time,(occupant.returnAt-time)/game.settings.secretSeconds);}
       let queueSpoke=false;
-      for(const npc of game.npcs.filter(n=>n.visible)){
+      for(const npc of game.speakers().filter(n=>n.visible)){
         if(npc.state==='happy')this.marker(npc.x,npc.y-140,'happy',time);
-        if(['following_albert','following_queue'].includes(npc.state))this.marker(npc.x,npc.y-140,'follow',time);
+        if(['following_albert','following_queue','following_pair'].includes(npc.state))this.marker(npc.x,npc.y-140,'follow',time);
         if(npc.state==='waiting_in_line')this.marker(npc.x,npc.y-140,String(game.roomQueue.findIndex(t=>t.npcId===npc.id)+1),time);
         if(!game.dialogue&&npc.bubble&&npc.bubble.until>time){if(npc.state!=='waiting_in_line'||!queueSpoke)this.speech(npc,npc.bubble.text,npc.state==='hysterical');if(npc.state==='waiting_in_line')queueSpoke=true;}
       }
+      if(game.player.visible!==false&&game.player.happyUntil>time)this.marker(game.player.x,game.player.y-145,'happy',time);
     }
     if(this.debug)this.drawDebug();
   }
@@ -101,27 +109,39 @@ export class Renderer {
     const bob=body.moving?Math.abs(Math.sin(body.step))*3.2:Math.sin(time*2)*.45;
     const lean=body.moving?Math.sin(body.step)*.014:0;const sad=body.state==='sad';
     c.translate(0,-bob);c.rotate(lean+(sad?.018:0));
+    if(body.cheerUntil>time)c.rotate(Math.sin(time*7)*.035);
+    if(body.dizzyUntil>time)c.rotate(Math.sin(time*4)*.035);
     const instrument=body.instrument&&(player||body.state==='playing_instrument')?body.instrument:null;
     const height=instrument?.pose==='drums'?119:player?134:131;
     if(player&&game.repair){c.translate(Math.sin(time*22)*1.5,0);c.rotate(Math.sin(time*9)*.016);}
     const drinkingSource=this.drinks[body.id]&&(body.drink==='whisky'||body.state==='drinking')?this.drinks[body.id]:null;
     const pose=body.moving?(drinkingSource?'carry-walk':'walk'):instrument?.pose||(player&&game.repair?'keys':null);
-    const source=drinkingSource||(body.atlasKey==='friends'?this.friends:body.atlasKey==='crew'?this.crew:{atlas:this.atlas,boxes,motion:this.motion});
-    if(drinkingSource)row=drinkFrame(body,time);
+    const cheering=body.id==='nikita'&&this.cheer&&body.cheerUntil>time&&body.state!=='drinking';
+    const source=cheering?this.cheer:drinkingSource||this.source(body);
+    if(cheering)row=0;else if(drinkingSource)row=drinkFrame(body,time);
     if(body.state==='hysterical'){
       c.translate(-53,-19);c.rotate(Math.PI/2);drawFrame(c,source.atlas,row,'down',0,0,110,source.boxes);c.restore();return;
     }
-    if(body.state==='dancing'){
-      const age=time-(body.danceStarted??time),remaining=body.danceUntil-time;
-      const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
-      const lift=ease(age/.8)*ease(remaining/.8),turn=age*7;
-      c.rotate(Math.PI*lift);c.translate(0,110*lift);
-      c.scale(lift>.98?.65+.35*Math.abs(Math.cos(turn)):1,1);
-      source.motion.draw(c,row,lift>.98?Math.floor(turn/(Math.PI/2))%4:0,'headspin',turn,110);c.restore();return;
+    if(body.state==='dancing'&&this.dance){
+      const age=time-(body.danceStarted??time),duration=Math.max(1,body.danceUntil-(body.danceStarted??time));
+      // Authored whole-body poses: top rock → six-step → windmill → headstand → freeze → rise.
+      const t=Math.max(0,Math.min(1,age/duration));let index;
+      if(t<.16)index=Math.floor(t/.04)%2;
+      else if(t<.23)index=2;
+      else if(t<.43)index=3+Math.floor((t-.23)/.045)%2;
+      else if(t<.70)index=5+Math.floor((t-.43)/.015)%3;
+      else if(t<.85)index=8+Math.floor((t-.70)/.025)%2;
+      else if(t<.94)index=10;else index=11;
+      const b=this.dance.boxes[Math.floor(index/4)][index%4];
+      const tallest=Math.max(this.dance.boxes[0][0].h,this.dance.boxes[0][1].h),scale=131/tallest;
+      c.drawImage(this.dance.atlas,b.x,b.y,b.w,b.h,-b.w*scale/2,-b.h*scale,b.w*scale,b.h*scale);
+      c.restore();return;
     }
     if(pose)source.motion.draw(c,row,frames[body.direction],pose,body.moving?body.step:time*9,height);
     else drawFrame(c,source.atlas,row,body.direction,0,0,height,source.boxes);
 
+    if(body.cheerUntil>time){c.fillStyle='#efca7f';c.font='18px Arial';c.fillText('♪',28+Math.sin(time*4)*5,-118);}
+    if(body.dizzyUntil>time){c.font='15px Arial';c.textAlign='center';for(let i=0;i<3;i++){const a=time*3+i*Math.PI*2/3;c.fillStyle='#f7d77d';c.fillText('✦',Math.cos(a)*23,-140+Math.sin(a)*6);}}
     if(instrument)this.playing(instrument,time);
     if(player&&body.gesture>0){c.globalAlpha=body.gesture/.45;c.strokeStyle='#f3c27e';c.lineWidth=2;c.beginPath();c.arc(0,-57,32,-.5,.7);c.stroke();}
     c.restore();
@@ -161,14 +181,19 @@ export class Renderer {
       {x:anchor.x+16,y:anchor.y-h/2},
     ];
     const exclusions=[...this.speechRects,...this.bodyRects,...(this.textExclusions||[])];
-    let placed=null;
+    let placed=null,fallback=null,fallbackOverlap=Infinity;
     for(const candidate of candidates){
       const x=Math.max(8,Math.min(this.width-w-8,candidate.x)),y=Math.max(8,candidate.y);
       const edge={x:Math.max(x+8,Math.min(x+w-8,anchor.x)),y:Math.max(y+8,Math.min(y+h-8,anchor.y))};
       if(y+h>this.height-65||Math.hypot(edge.x-anchor.x,edge.y-anchor.y)>38)continue;
-      if(exclusions.some(r=>x<r.x+r.w+5&&x+w+5>r.x&&y<r.y+r.h+5&&y+h+5>r.y))continue;
+      const overlaps=r=>x<r.x+r.w+5&&x+w+5>r.x&&y<r.y+r.h+5&&y+h+5>r.y;
+      if([...this.speechRects,...(this.textExclusions||[])].some(overlaps))continue;
+      const overlap=this.bodyRects.filter(overlaps).reduce((sum,r)=>sum+Math.max(0,Math.min(x+w,r.x+r.w)-Math.max(x,r.x))*Math.max(0,Math.min(y+h,r.y+r.h)-Math.max(y,r.y)),0);
+      if(overlap<fallbackOverlap){fallback={x,y,w,h,edge};fallbackOverlap=overlap;}
+      if(exclusions.some(overlaps))continue;
       placed={x,y,w,h,edge};break;
     }
+    placed??=fallback;
     if(!placed){c.restore();return;}
     const {x,y,edge}=placed;this.speechRects.push({x,y,w,h});
     c.fillStyle=loud?'#ffe0c8':'#fff4df';c.strokeStyle='#5b4638';c.lineWidth=1.5;
@@ -176,15 +201,11 @@ export class Renderer {
     c.beginPath();c.moveTo(edge.x+nx,edge.y+ny);c.lineTo(anchor.x,anchor.y);c.lineTo(edge.x-nx,edge.y-ny);c.fill();c.stroke();
     c.beginPath();c.roundRect(x,y,w,h,10);c.fill();c.stroke();c.fillStyle='#302721';c.textAlign='left';lines.forEach((t,i)=>c.fillText(t,x+12,y+23+i*17));c.restore();
   }
-  smoke(time,age){
-    const c=this.ctx;c.save();
-    for(let i=0;i<22;i++){
-      const life=2.8,birth=i*.127,elapsed=(age-birth)%life;if(age<birth||elapsed<0)continue;
-      const t=elapsed/life,x=154+t*49+Math.sin(time*1.5+i*2)*13*t,y=760-t*141+Math.sin(i*3)*9;
-      const r=8+t*29,g=c.createRadialGradient(x-r*.2,y-r*.2,0,x,y,r);
-      const alpha=Math.sin(t*Math.PI)*.23;g.addColorStop(0,`rgba(217,203,235,${alpha})`);g.addColorStop(.55,`rgba(182,162,215,${alpha*.7})`);g.addColorStop(1,'rgba(152,133,190,0)');
-      c.fillStyle=g;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();
-    }c.restore();
+  curtain(time){
+    // Warp only the visible closed fabric from the background; there is no interior.
+    const c=this.ctx;c.save();c.beginPath();c.moveTo(111,559);c.lineTo(176,640);c.lineTo(179,850);c.lineTo(153,924);c.lineTo(79,864);c.closePath();c.clip();
+    for(let y=560;y<925;y+=3){const envelope=Math.sin((y-560)/365*Math.PI),dx=Math.sin(time*17+y*.032)*3.5*envelope+Math.sin(time*8)*1.5*envelope;c.drawImage(this.background,77,y,105,3,77+dx,y,105,3);}
+    c.restore();
   }
   marker(x,y,type,time,progress=1) {
     const c=this.ctx,bob=Math.sin(time*3+x)*3,r=16;c.save();c.translate(x,y+bob);

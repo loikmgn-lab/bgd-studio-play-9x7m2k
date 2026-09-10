@@ -1,5 +1,6 @@
-import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER} from './content.js?v=0.7.0-r2';
-import {BANTER} from './banter.js?v=0.7.0-r2';
+import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER, BAND_GUESTS} from './content.js?v=0.8.0';
+import {createPencilGame,updatePencilGame,dropPencil} from './minigame.js?v=0.8.0';
+import {BANTER} from './banter.js?v=0.8.0';
 export const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 export function atCurtain(body) {const z=WORLD.curtain.zone;return body.x>=z.x&&body.x<=z.x+z.w&&body.y>=z.y&&body.y<=z.y+z.h;}
@@ -75,23 +76,26 @@ function direction(body,dx,dy) {
 export class Game {
   constructor(settings={},random=Math.random){this.settings={...SETTINGS,...settings};this.random=random;this.mode='start';this.signals=[];}
   start(){
-    this.player={...WORLD.spawn,radius:12,direction:'up',moving:false,step:0,gesture:0,instrument:null};
+    this.player={...WORLD.spawn,radius:12,direction:'up',moving:false,step:0,gesture:0,instrument:null,visible:true,happyUntil:0};
     this.npcs=CHARACTERS.filter(n=>n.active).map((n,i)=>({
       roomAllowed:n.roomAllowed!==false,drink:n.drink,drinkAt:8+i,sipUntil:0,sipStarted:0,drinkCount:0,...n.spawn,id:n.id,name:n.name,home:{...n.spawn},atlasKey:n.atlasKey||'original',atlasRow:n.atlasRow,
-      radius:12,direction:'down',moving:false,step:0,state:this.settings.staggerArrivals?'dormant':'idle',
-      visible:!this.settings.staggerArrivals,path:[],repath:0,wanderAt:10+i*3,wanderIndex:i,
+      radius:12,direction:'down',moving:false,step:0,state:this.settings.staggerArrivals&&!n.alwaysPresent?'dormant':'idle',
+      visible:!this.settings.staggerArrivals||!!n.alwaysPresent,path:[],repath:0,wanderAt:10+i*3,wanderIndex:i,
       instrument:null,instrumentIndex:i,instrumentAt:this.settings.firstInstrumentAt+i*2,
       arrivalAt:this.settings.firstArrivalAt+i*this.settings.arrivalInterval,
-      danceAt:24,danceUntil:0,socialAfter:0,bubble:null,shoutAt:0,
+      cheerful:n.id==='nikita',cheerAt:6+i,cheerUntil:0,approachAfter:0,approachNear:false,danceAt:24,danceUntil:0,socialAfter:0,bubble:null,shoutAt:0,
     }));
+    this.guests=BAND_GUESTS.map(n=>({...n,atlasKey:'band',visible:true,state:'seated',bubble:null,approachAfter:0,approachNear:false}));
+    this.pair=null;this.minigame=null;this.approachAvailableAt=0;
     this.npc=this.npcs.find(n=>n.id==='loik');
     this.events=[];this.eventSerial=0;this.roomQueue=[];this.roomOccupant=null;this.roomNextAt=0;this.groupSerial=0;
     this.elapsed=0;this.mood=this.settings.initialMood;this.maxMood=this.mood;
-    this.stats={repairs:0,people:0,rehearsals:0,secretVisits:0};this.dialogue=null;this.repair=null;this.item=null;
+    this.stats={repairs:0,people:0,rehearsals:0,secretVisits:0,pencilWins:0};this.dialogue=null;this.repair=null;this.item=null;
     this.nextTechnical=this.settings.firstEventAt;this.nextSocial=this.settings.firstSadAt;this.socialCursor=0;
     this.nextAmbient=this.settings.ambientInterval;this.nextSpeech=12;this.speechCursor=0;this.speechAvailableAt=0;this.lastLines=new Map();
     this.mode='playing';this.paused=false;this.toast=null;this.signals=['start'];
   }
+  speakers(){return [...(this.npcs||[]),...(this.guests||[])];}
   person(id){return this.npcs.find(n=>n.id===id);}
   pick(key,id){
     const list=['greeting','short'].includes(key)?(BANTER[key][id]||BANTER.arrival):BANTER[key];
@@ -102,12 +106,12 @@ export class Game {
   }
   bubble(npc,text,duration=3.2,priority=false){
     if(this.dialogue||(!priority&&(this.elapsed<this.speechAvailableAt||this.toast?.until>this.elapsed)))return false;
-    for(const n of this.npcs||[])n.bubble=null;
+    for(const n of this.speakers())n.bubble=null;
     npc.bubble={text,until:this.elapsed+Math.min(duration,3.2)};this.speechAvailableAt=this.elapsed+16;return true;
   }
   say(speaker,text,after=null){this.dialogue={speaker,text,after};}
   closeDialogue(){const after=this.dialogue?.after;this.dialogue=null;after?.();}
-  notice(text){this.toast={text,until:this.elapsed+3};for(const n of this.npcs||[])n.bubble=null;}
+  notice(text){this.toast={text,until:this.elapsed+3};for(const n of this.speakers())n.bubble=null;}
   socialEvent(id){return this.events.find(e=>e.type==='comfort'&&e.npcId===id);}
   canNeedRoom(npc){
     return npc?.roomAllowed&&npc.visible&&['idle','walking','going_to_instrument','playing_instrument','dancing','going_to_table','drinking'].includes(npc.state)
@@ -144,12 +148,14 @@ export class Game {
     }return result;
   }
   nearestTarget(){
+    if(this.minigame||this.player?.visible===false)return null;
+    if(this.pair&&atCurtain(this.player))return {...OBJECTS.find(o=>o.id==='curtain'),action:'Зайти вместе с Анфисой'};
     const escort=this.events.find(e=>e.type==='comfort'&&e.phase==='following');
     if(escort&&atCurtain(this.player))return {...OBJECTS.find(o=>o.id==='curtain'),event:escort,action:'Проводить очередь за шторку'};
     const targets=this.targets().filter(t=>distance(t,this.player)<this.settings.interactionRadius).sort((a,b)=>distance(a,this.player)-distance(b,this.player));
     if(targets.length)return targets[0];
-    const nearby=this.npcs.filter(n=>n.visible&&!['arriving','dormant'].includes(n.state)&&distance(n,this.player)<70).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
-    if(nearby)return {...nearby,action:'Поговорить · '+nearby.name};
+    const nearby=this.speakers().filter(n=>n.visible&&!['arriving','dormant'].includes(n.state)&&distance(n,this.player)<70).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
+    if(nearby)return {...nearby,action:nearby.id==='anfisa'?(this.pair?'Анфиса идёт с тобой':'Пригласить Анфису'):nearby.id==='nikita'?'Дать пять Никите':'Поговорить · '+nearby.name};
     const instrument=INSTRUMENTS.find(i=>distance(i,this.player)<65&&!this.npcs.some(n=>n.instrument?.id===i.id)&&lineClear(this.player,i));
     if(instrument)return {...instrument,id:'play-instrument',instrument,action:'Сыграть на '+instrument.name};
     return null;
@@ -169,17 +175,21 @@ export class Game {
   interact(){
     if(this.mode!=='playing'||this.paused||this.orientationBlocked)return;
     if(this.dialogue){this.closeDialogue();return;}
+    if(this.minigame){this.dropPencil();return;}
     if(this.repair)return;
     if(this.player.instrument){this.player.instrument=null;return;}
     const target=this.nearestTarget();if(!target)return;this.player.gesture=.45;const event=target.event;
-    const npc=this.person(target.id);
+    const npc=this.speakers().find(n=>n.id===target.id);
     if(npc){
+      if(npc.id==='anfisa'){if(!this.pair)this.say(npc.name,'Пойдём! Посмотрим, кто здесь самый меткий.',()=>this.beginPair());else this.notice('Анфиса с тобой. Веди её к шторке.');return;}
+      if(npc.id==='nikita'){npc.cheerUntil=this.elapsed+5;npc.cheerAt=this.elapsed+12;this.player.happyUntil=this.elapsed+4;this.say(npc.name,this.pick('greeting','nikita'));return;}
       if(event?.phase==='new')this.say(npc.name,this.pick(npc.id==='samat'?'samatSad':'sad'),()=>this.beginEscort(event));
       else{
         const category=npc.state==='happy'?'happy':npc.state==='waiting_in_line'?'queue':['following_queue','following_albert'].includes(npc.state)?'follow':npc.state==='playing_instrument'?'playing':npc.state==='dancing'?'dance':'greeting';
         this.say(npc.name,this.pick(category,npc.id));
       }
     }else if(target.id==='curtain'){
+      if(this.pair){this.notice(this.roomOccupant?'Сейчас освободится — зайдёте вдвоём.':'Подожди Анфису у шторки.');return;}
       for(const ticket of this.roomQueue)if(ticket.groupId===event.groupId)ticket.activated=true;
       this.notice('Все зайдут по очереди.');
     }else if(target.id==='play-instrument'){
@@ -219,6 +229,7 @@ export class Game {
       this.roomOccupant=null;this.roomNextAt=this.elapsed+.75;
     }
     if(this.roomOccupant||this.elapsed<this.roomNextAt)return;
+    if(this.pair&&atCurtain(this.player))return;
     const ticket=this.roomQueue[0];if(!ticket?.activated)return;
     const npc=this.person(ticket.npcId);if(distance(npc,WORLD.curtain)>60)return;
     if(npc.id==='erbak'){
@@ -230,11 +241,55 @@ export class Game {
     Object.assign(npc,{state:'waiting',visible:false,moving:false,path:[],instrument:null,bubble:null});
     const event=this.events.find(e=>e.id===ticket.eventId);if(event){event.phase='waiting';event.returnAt=this.roomOccupant.returnAt;}
   }
+  beginPair(){
+    const npc=this.person('anfisa');if(this.pair||!npc?.visible)return;
+    this.pair={phase:'following'};this.player.instrument=null;
+    Object.assign(npc,{state:'following_pair',instrument:null,path:[],repath:0,moving:false,bubble:null});
+    this.notice('Анфиса идёт за тобой. Шторка — слева внизу.');
+  }
+  updatePair(dt=0){
+    if(!this.pair||this.minigame)return;
+    const npc=this.person('anfisa');
+    if(atCurtain(this.player)&&distance(npc,WORLD.curtain)<50&&!this.roomOccupant){
+      // Finish the short approach visibly before both bodies disappear at the fabric.
+      if(distance(this.player,WORLD.curtain)>=38){
+        const next=findPath(this.player,WORLD.curtain)[0];
+        if(next&&dt>0){const d=distance(this.player,next),step=Math.min(d,this.settings.walkSpeed*dt);if(d){const dx=(next.x-this.player.x)/d*step,dy=(next.y-this.player.y)/d*step;moveBody(this.player,dx,dy);direction(this.player,dx,dy);this.player.moving=true;this.player.step+=dt*11;}}
+        return;
+      }
+      this.pair.phase='inside';this.minigame=createPencilGame();this.player.visible=false;this.player.moving=false;
+      Object.assign(npc,{visible:false,moving:false,path:[],bubble:null});
+      for(const n of this.speakers())n.bubble=null;
+    }
+  }
+  dropPencil(){if(this.mode==='playing'&&!this.paused&&!this.orientationBlocked&&this.minigame)dropPencil(this.minigame);}
+  leavePair(won=false){
+    if(!this.pair)return;
+    const npc=this.person('anfisa');
+    Object.assign(this.player,{...WORLD.curtain.exit,visible:true,direction:'right',moving:false,happyUntil:this.elapsed+10});
+    Object.assign(npc,{x:270,y:710,visible:true,state:'happy',direction:'right',path:[],instrument:null,happyUntil:this.elapsed+10,dizzyUntil:this.elapsed+6});
+    this.pair=null;this.minigame=null;this.roomNextAt=this.elapsed+.75;
+    if(won){this.stats.pencilWins++;this.stats.people++;this.stats.secretVisits++;this.mood=clamp(this.mood+14,0,100);this.maxMood=Math.max(this.maxMood,this.mood);this.signals.push('return');}
+    this.notice(won?'Три попадания! Альберт и Анфиса возвращаются довольные.':'Хорошо поиграли! Можно попробовать ещё раз.');
+  }
+  updateApproach(){
+    const nearby=this.speakers().filter(n=>n.visible&&!['arriving','dormant','hysterical','following_pair'].includes(n.state));
+    for(const n of nearby)if(distance(n,this.player)>135)n.approachNear=false;
+    if(this.elapsed<this.approachAvailableAt||this.speakers().some(n=>n.bubble?.until>this.elapsed))return;
+    const npc=nearby.filter(n=>!n.approachNear&&this.elapsed>=n.approachAfter&&distance(n,this.player)<105&&lineClear(this.player,{x:n.x,y:n.atlasKey==='band'?300:n.y})).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
+    if(!npc)return;
+    if(this.bubble(npc,this.pick('short',npc.id),3.2,true)){
+      npc.approachNear=true;npc.approachAfter=this.elapsed+20;this.approachAvailableAt=this.elapsed+4;
+      if(npc.id==='nikita')npc.cheerUntil=this.elapsed+4;
+    }
+  }
   togglePause(){if(this.mode==='playing')this.paused=!this.paused;}
-  finish(){this.mode='finished';this.dialogue=null;this.repair=null;this.player.moving=false;for(const npc of this.npcs)npc.moving=false;}
+  finish(){if(this.pair)this.leavePair(false);this.mode='finished';this.dialogue=null;this.repair=null;this.player.moving=false;for(const npc of this.npcs)npc.moving=false;}
   update(dt,input={x:0,y:0,run:false}){
     if(this.mode!=='playing'||this.paused||this.orientationBlocked||this.dialogue)return;
-    dt=Math.min(dt,.05);this.elapsed+=dt;
+    dt=Math.min(dt,.05);
+    if(this.minigame){updatePencilGame(this.minigame,dt,input.x||0);if(this.minigame.complete)this.leavePair(true);return;}
+    this.elapsed+=dt;
     if(this.elapsed>=this.settings.sessionSeconds){this.elapsed=this.settings.sessionSeconds;this.finish();return;}
     if(this.elapsed>=this.nextTechnical){this.spawnEvent('microphone');this.nextTechnical=this.elapsed+Math.max(this.settings.minimumInterval,this.settings.eventInterval-this.elapsed/25);}
     if(this.elapsed>=this.nextSocial){this.spawnNextSocial();this.nextSocial=this.elapsed+this.settings.socialInterval;}
@@ -255,7 +310,9 @@ export class Game {
     }
     if(atCurtain(this.player))for(const ticket of this.roomQueue)ticket.activated=true;
     for(const npc of this.npcs)this.updateNpc(dt,npc);
-    this.updateRoom();
+    this.updateRoom();this.updatePair(dt);
+    if(this.minigame)return;
+    this.updateApproach();
     for(const npc of this.npcs){
       if(!npc.visible||!['idle','walking','going_to_instrument','arriving'].includes(npc.state))continue;
       for(const other of this.npcs){const d=distance(npc,other);if(other!==npc&&other.visible&&d>0&&d<35)moveBody(npc,(npc.x-other.x)/d*dt*24,(npc.y-other.y)/d*dt*24);}
@@ -279,6 +336,7 @@ export class Game {
       // Friends enter naturally without covering the room with arrival messages.
     }
     if(!npc.visible)return;
+    if(npc.cheerful&&this.elapsed>=npc.cheerAt){npc.cheerUntil=this.elapsed+3.5;npc.cheerAt=this.elapsed+13;}
     if(npc.state==='hysterical'){
       npc.moving=false;
       if(this.elapsed>=npc.shoutAt){const line='Мне нужно в реанимационную!';if(this.bubble(npc,line))this.signals.push({type:'shout',text:line.toUpperCase()});npc.shoutAt=this.elapsed+16;}
@@ -290,7 +348,10 @@ export class Game {
     }
     const ticket=this.roomQueue.find(t=>t.npcId===npc.id);
     let target=null,speed=85;
-    if(ticket){
+    if(npc.state==='following_pair'){
+      target=atCurtain(this.player)?WORLD.curtain:this.player;speed=this.settings.followerSpeed;
+      if(distance(npc,target)<(atCurtain(this.player)?12:52)){npc.moving=false;npc.path=[];return;}
+    }else if(ticket){
       const index=this.roomQueue.indexOf(ticket);speed=this.settings.followerSpeed;
       if(ticket.activated){
         target=this.queuePosition(index);npc.state='waiting_in_line';
@@ -340,7 +401,7 @@ export class Game {
           npc.moving=false;if(this.elapsed<npc.playUntil)return;
           npc.state='idle';npc.instrument=null;npc.instrumentAt=this.elapsed+this.settings.instrumentBreak;npc.wanderAt=this.elapsed+1;
         }
-        if(!npc.drink&&['idle','walking'].includes(npc.state)&&this.elapsed>=npc.instrumentAt){
+        if(npc.id!=='anfisa'&&!npc.drink&&['idle','walking'].includes(npc.state)&&this.elapsed>=npc.instrumentAt){
           const available=INSTRUMENTS.filter(i=>i.id!==this.player.instrument?.id&&!this.npcs.some(n=>n!==npc&&n.instrument?.id===i.id));
           if(available.length){npc.instrument=available[npc.instrumentIndex++%available.length];npc.state='going_to_instrument';npc.path=[];npc.repath=0;}
           else npc.instrumentAt=this.elapsed+3;
@@ -362,6 +423,7 @@ export class Game {
     const before={x:npc.x,y:npc.y};moveBody(npc,dx,dy);npc.moving=distance(before,npc)>.01;direction(npc,dx,dy);if(npc.moving)npc.step+=dt*10;
   }
   taskText(){
+    if(this.pair)return this.roomOccupant&&atCurtain(this.player)?'Подождите у шторки — скоро освободится.':'Анфиса с тобой · веди её к шторке слева внизу';
     if(this.repair)return 'Проверяю контакт…';
     const social=this.events.find(e=>e.type==='comfort'&&e.phase==='following');
     if(social)return 'Тайная комната — слева внизу. Веди компанию к шторке';
