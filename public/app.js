@@ -1,3 +1,5 @@
+// Public access is paused until the owner explicitly reopens the game.
+if(!new URLSearchParams(location.search).has('preview')){location.replace('./');await new Promise(()=>{});}
 import {drawPencilGame} from './minigame.js?v=0.8.0';
 import {floatingJoystick} from './controls.js?v=0.8.0';
 import {Game} from './core.js?v=0.8.0';
