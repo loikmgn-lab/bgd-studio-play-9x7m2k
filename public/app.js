@@ -1,5 +1,3 @@
-// Public access is paused until the owner explicitly reopens the game.
-if(!['127.0.0.1','localhost','[::1]'].includes(location.hostname)){location.replace('./');await new Promise(()=>{});}
 import {drawPencilGame} from './minigame.js?v=0.8.1';
 import {floatingJoystick} from './controls.js?v=0.8.1';
 import {Game} from './core.js?v=0.8.1';
