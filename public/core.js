@@ -1,6 +1,6 @@
-import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER, BAND_GUESTS} from './content.js?v=0.8.0';
-import {createPencilGame,updatePencilGame,dropPencil} from './minigame.js?v=0.8.0';
-import {BANTER} from './banter.js?v=0.8.0';
+import {SETTINGS, WORLD, CHARACTERS, OBJECTS, DIALOGUES, EVENT_TYPES, INSTRUMENTS, SOCIAL_ORDER, BAND_GUESTS} from './content.js?v=0.8.1';
+import {createPencilGame,updatePencilGame,dropPencil} from './minigame.js?v=0.8.1';
+import {BANTER} from './banter.js?v=0.8.1';
 export const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 export function atCurtain(body) {const z=WORLD.curtain.zone;return body.x>=z.x&&body.x<=z.x+z.w&&body.y>=z.y&&body.y<=z.y+z.h;}
@@ -154,7 +154,7 @@ export class Game {
     if(escort&&atCurtain(this.player))return {...OBJECTS.find(o=>o.id==='curtain'),event:escort,action:'Проводить очередь за шторку'};
     const targets=this.targets().filter(t=>distance(t,this.player)<this.settings.interactionRadius).sort((a,b)=>distance(a,this.player)-distance(b,this.player));
     if(targets.length)return targets[0];
-    const nearby=this.speakers().filter(n=>n.visible&&!['arriving','dormant'].includes(n.state)&&distance(n,this.player)<70).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
+    const nearby=this.speakers().filter(n=>n.visible&&!['arriving','dormant'].includes(n.state)&&distance(n.approach||n,this.player)<70).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
     if(nearby)return {...nearby,action:nearby.id==='anfisa'?(this.pair?'Анфиса идёт с тобой':'Пригласить Анфису'):nearby.id==='nikita'?'Дать пять Никите':'Поговорить · '+nearby.name};
     const instrument=INSTRUMENTS.find(i=>distance(i,this.player)<65&&!this.npcs.some(n=>n.instrument?.id===i.id)&&lineClear(this.player,i));
     if(instrument)return {...instrument,id:'play-instrument',instrument,action:'Сыграть на '+instrument.name};
@@ -189,7 +189,7 @@ export class Game {
         this.say(npc.name,this.pick(category,npc.id));
       }
     }else if(target.id==='curtain'){
-      if(this.pair){this.notice(this.roomOccupant?'Сейчас освободится — зайдёте вдвоём.':'Подожди Анфису у шторки.');return;}
+      if(this.pair){this.notice(this.roomOccupant?'Там сейчас занято. Подождём снаружи.':'Подожди Анфису у шторки.');return;}
       for(const ticket of this.roomQueue)if(ticket.groupId===event.groupId)ticket.activated=true;
       this.notice('Все зайдут по очереди.');
     }else if(target.id==='play-instrument'){
@@ -243,13 +243,15 @@ export class Game {
   }
   beginPair(){
     const npc=this.person('anfisa');if(this.pair||!npc?.visible)return;
-    this.pair={phase:'following'};this.player.instrument=null;
+    this.pair={phase:'following',busyNotified:false};this.player.instrument=null;
     Object.assign(npc,{state:'following_pair',instrument:null,path:[],repath:0,moving:false,bubble:null});
     this.notice('Анфиса идёт за тобой. Шторка — слева внизу.');
   }
   updatePair(dt=0){
     if(!this.pair||this.minigame)return;
     const npc=this.person('anfisa');
+    if(atCurtain(this.player)&&this.roomOccupant){if(!this.pair.busyNotified){this.notice('Там сейчас занято. Подождём снаружи.');this.bubble(npc,'Там сейчас занято.',3.2,true);this.pair.busyNotified=true;}return;}
+    if(!atCurtain(this.player))this.pair.busyNotified=false;
     if(atCurtain(this.player)&&distance(npc,WORLD.curtain)<50&&!this.roomOccupant){
       // Finish the short approach visibly before both bodies disappear at the fabric.
       if(distance(this.player,WORLD.curtain)>=38){
@@ -274,9 +276,9 @@ export class Game {
   }
   updateApproach(){
     const nearby=this.speakers().filter(n=>n.visible&&!['arriving','dormant','hysterical','following_pair'].includes(n.state));
-    for(const n of nearby)if(distance(n,this.player)>135)n.approachNear=false;
+    for(const n of nearby)if(distance(n.approach||n,this.player)>135)n.approachNear=false;
     if(this.elapsed<this.approachAvailableAt||this.speakers().some(n=>n.bubble?.until>this.elapsed))return;
-    const npc=nearby.filter(n=>!n.approachNear&&this.elapsed>=n.approachAfter&&distance(n,this.player)<105&&lineClear(this.player,{x:n.x,y:n.atlasKey==='band'?300:n.y})).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
+    const npc=nearby.filter(n=>!n.approachNear&&this.elapsed>=n.approachAfter&&distance(n.approach||n,this.player)<105&&lineClear(this.player,n.approach||n)).sort((a,b)=>distance(a,this.player)-distance(b,this.player))[0];
     if(!npc)return;
     if(this.bubble(npc,this.pick('short',npc.id),3.2,true)){
       npc.approachNear=true;npc.approachAfter=this.elapsed+20;this.approachAvailableAt=this.elapsed+4;
@@ -423,7 +425,7 @@ export class Game {
     const before={x:npc.x,y:npc.y};moveBody(npc,dx,dy);npc.moving=distance(before,npc)>.01;direction(npc,dx,dy);if(npc.moving)npc.step+=dt*10;
   }
   taskText(){
-    if(this.pair)return this.roomOccupant&&atCurtain(this.player)?'Подождите у шторки — скоро освободится.':'Анфиса с тобой · веди её к шторке слева внизу';
+    if(this.pair)return this.roomOccupant&&atCurtain(this.player)?'Там сейчас занято. Подождём снаружи.':'Анфиса с тобой · веди её к шторке слева внизу';
     if(this.repair)return 'Проверяю контакт…';
     const social=this.events.find(e=>e.type==='comfort'&&e.phase==='following');
     if(social)return 'Тайная комната — слева внизу. Веди компанию к шторке';

@@ -71,10 +71,10 @@ export const INSTRUMENTS = [
 export const SOCIAL_ORDER=['samat','loik','vovan','katya','tema','erbak','username','david'];
 export const LOUNGE_GUESTS=[{id:'guest-a',x:295,y:255,frame:0,phase:0},{id:'guest-b',x:414,y:255,frame:2,phase:3.5}];
 export const BAND_GUESTS=[
-  {id:'james',name:'Джеймс',x:1048,y:271,atlasRow:0,frame:0},
-  {id:'lars',name:'Ларс',x:1121,y:271,atlasRow:0,frame:1},
-  {id:'kirk',name:'Кирк',x:1194,y:271,atlasRow:0,frame:2},
-  {id:'robert',name:'Роберт',x:1267,y:271,atlasRow:0,frame:3},
+  {id:'james',name:'Джеймс',approach:{x:470,y:270},x:288,y:255,atlasRow:0,frame:0},
+  {id:'lars',name:'Ларс',approach:{x:470,y:255},x:365,y:255,atlasRow:0,frame:1},
+  {id:'kirk',name:'Кирк',approach:{x:470,y:270},x:440,y:255,atlasRow:0,frame:2},
+  {id:'robert',name:'Роберт',approach:{x:320,y:380},x:203,y:330,atlasRow:0,frame:3},
 ];
 export const DIALOGUES = {
   greeting: 'Всё спокойно. Пока можно просто освоиться.',

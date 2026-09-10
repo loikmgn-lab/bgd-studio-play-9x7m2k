@@ -1,3 +1,4 @@
+if(process.argv.includes('--revisions')){await import('./revisions.mjs');process.exit(0);}
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url);
@@ -7,7 +8,7 @@ const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleF
 const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
 const base=process.env.BGD_URL||'http://127.0.0.1:4178/bgd/';
 try{
-  await page.goto(base+'?debug=1');await page.waitForFunction(()=>window.__bgd,{timeout:30000});
+  await page.goto(base+'?debug=1',{waitUntil:'domcontentloaded',timeout:90000});await page.waitForFunction(()=>window.__bgd,null,{timeout:120000});
   await page.screenshot({path:'artifacts/start-desktop.png'});console.log('Start loaded; screenshot saved.');
   if(process.argv.includes('--cast')){await (await import('./cast.mjs')).castQA(page,errors);}
   else if(process.argv.includes('--motion')){

@@ -1,6 +1,6 @@
-import { WORLD, LOUNGE_GUESTS } from './content.js?v=0.8.0';
-import {cameraTarget,drinkFrame} from './camera.js?v=0.8.0';
-import { MotionAtlas } from './motion.js?v=0.8.0';
+import { WORLD } from './content.js?v=0.8.1';
+import {cameraTarget,drinkFrame} from './camera.js?v=0.8.1';
+import { MotionAtlas } from './motion.js?v=0.8.1';
 const frames={down:0,right:1,up:2,left:3};
 const boxes=[
   [{x:108,y:7,w:211,h:476},{x:522,y:7,w:151,h:477},{x:858,y:7,w:190,h:477},{x:1214,y:7,w:164,h:477}],
@@ -43,7 +43,7 @@ export class Renderer {
   addFriends(atlas){const frameBoxes=detectFrames(atlas,4);this.friends={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
   addNewcomers(atlas){const frameBoxes=detectFrames(atlas,2);this.newcomers={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
   addCheer(atlas){const frameBoxes=detectFrames(atlas,1);this.cheer={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
-  addBand(atlas){this.band={atlas,boxes:detectFrames(atlas,1)};}
+  addBand(atlas){this.band={atlas,boxes:detectFrames(atlas,2)};}
   addDance(atlas){this.dance={atlas,boxes:detectFrames(atlas,3)};}
   source(person){return this[person?.atlasKey]||{atlas:this.atlas,boxes,motion:this.motion};}
   addDrink(id,atlas){const frameBoxes=detectFrames(atlas,3);this.drinks[id]={atlas,boxes:frameBoxes,motion:new MotionAtlas(atlas,frameBoxes)};}
@@ -72,15 +72,14 @@ export class Renderer {
     this.speechRects=[];this.bodyRects=[];
     c.setTransform(this.dpr,0,0,this.dpr,0,0);c.fillStyle='#090b0d';c.fillRect(0,0,this.width,this.height);
     c.translate(v.x,v.y);c.scale(v.scale,v.scale);c.drawImage(this.background,0,0,WORLD.width,WORLD.height);
-    if(game.roomOccupant||game.minigame)this.curtain(time+(game.minigame?.time||0));
+    if(game.minigame)this.curtain(time+(game.minigame?.time||0));
     // Warm practical lights and BGD's blue neon breathe very subtly.
     const pulse=.025+Math.sin(time*.9)*.008;c.globalCompositeOperation='screen';
     for(const [x,y,r,color] of [[1430,510,180,'75,90,245'],[195,112,130,'255,164,51'],[510,104,115,'255,145,35']]){
       const g=c.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,`rgba(${color},${pulse})`);g.addColorStop(1,`rgba(${color},0)`);c.fillStyle=g;c.fillRect(x-r,y-r,r*2,r*2);
     }c.globalCompositeOperation='source-over';
     if(game.player) {
-      if(this.lounge)for(const guest of LOUNGE_GUESTS){const sip=(time+guest.phase)%9>6;drawFrame(c,this.lounge.atlas,0,['down','right','up','left'][guest.frame+Number(sip)],guest.x,guest.y,123,this.lounge.boxes);}
-      if(this.band)for(const guest of game.guests){const b=this.band.boxes[0][guest.frame],h=117,w=b.w/b.h*h;c.drawImage(this.band.atlas,b.x,b.y,b.w,b.h,guest.x-w/2,guest.y-h+Math.sin(time*2+guest.frame)*.6,w,h);}
+      if(this.band)for(const guest of game.guests){const sip=(time+guest.frame*2.2)%9>6.5,b=this.band.boxes[Number(sip)][guest.frame],h=117,w=b.w/b.h*h;c.drawImage(this.band.atlas,b.x,b.y,b.w,b.h,guest.x-w/2,guest.y-h+Math.sin(time*2+guest.frame)*.6,w,h);}
       const entities=[...(game.player.visible!==false?[{body:game.player,row:0,player:true}]:[]),...game.npcs.filter(n=>n.visible).map(n=>({body:n,row:n.atlasRow,player:false}))];
       this.bodyRects=[...entities,...(game.guests||[]).map(body=>({body}))].map(({body})=>{const at=this.screen(body);return {x:at.x-24*v.scale,y:at.y-132*v.scale,w:48*v.scale,h:132*v.scale};});
       entities.sort((a,b)=>a.body.y-b.body.y);for(const item of entities)this.character(item,time,game);
@@ -89,7 +88,7 @@ export class Renderer {
         else{const point=target.marker||target;this.marker(point.x,point.y,target.id==='curtain'?'arrow':target.icon,time);}
       }
       const occupant=game.roomOccupant;
-      if(occupant){this.marker(146,715,'wait',time,(occupant.returnAt-time)/game.settings.secretSeconds);}
+      if(occupant){this.smoke(time,time-occupant.enteredAt);this.marker(146,715,'wait',time,(occupant.returnAt-time)/game.settings.secretSeconds);}
       let queueSpoke=false;
       for(const npc of game.speakers().filter(n=>n.visible)){
         if(npc.state==='happy')this.marker(npc.x,npc.y-140,'happy',time);
@@ -200,6 +199,16 @@ export class Renderer {
     const dx=anchor.x-edge.x,dy=anchor.y-edge.y,length=Math.hypot(dx,dy)||1,nx=-dy/length*5,ny=dx/length*5;
     c.beginPath();c.moveTo(edge.x+nx,edge.y+ny);c.lineTo(anchor.x,anchor.y);c.lineTo(edge.x-nx,edge.y-ny);c.fill();c.stroke();
     c.beginPath();c.roundRect(x,y,w,h,10);c.fill();c.stroke();c.fillStyle='#302721';c.textAlign='left';lines.forEach((t,i)=>c.fillText(t,x+12,y+23+i*17));c.restore();
+  }
+  smoke(time,age){
+    const c=this.ctx;c.save();
+    for(let i=0;i<22;i++){
+      const life=2.8,birth=i*.127,elapsed=(age-birth)%life;if(age<birth||elapsed<0)continue;
+      const t=elapsed/life,x=154+t*49+Math.sin(time*1.5+i*2)*13*t,y=760-t*141+Math.sin(i*3)*9;
+      const r=8+t*29,g=c.createRadialGradient(x-r*.2,y-r*.2,0,x,y,r);
+      const alpha=Math.sin(t*Math.PI)*.23;g.addColorStop(0,`rgba(217,203,235,${alpha})`);g.addColorStop(.55,`rgba(182,162,215,${alpha*.7})`);g.addColorStop(1,'rgba(152,133,190,0)');
+      c.fillStyle=g;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();
+    }c.restore();
   }
   curtain(time){
     // Warp only the visible closed fabric from the background; there is no interior.

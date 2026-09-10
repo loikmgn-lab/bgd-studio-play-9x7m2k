@@ -1,4 +1,4 @@
-import {AUDIO} from './content.js?v=0.8.0';
+import {AUDIO} from './content.js?v=0.8.1';
 export class Sound {
   constructor(){this.enabled=false;this.context=null;}
   stopSpeech(){globalThis.speechSynthesis?.cancel();}

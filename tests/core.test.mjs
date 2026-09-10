@@ -213,7 +213,7 @@ test('end of shift cannot strand Albert or Anfisa behind the curtain',()=>{
 test('nearby characters speak without E, no rapid repeated speech, band members respond',()=>{
  const g=active();for(const n of g.npcs)Object.assign(n,{wanderAt:999,instrumentAt:999,drinkAt:999,danceAt:999});
  const alex=g.person('alex');Object.assign(g.player,{x:alex.x,y:alex.y+50});g.updateApproach();assert.ok(alex.bubble);assert.equal(g.dialogue,null);const first=alex.bubble;tick(g,6);assert.ok(!alex.bubble||alex.bubble===first);
- const band=g.guests[0];Object.assign(g.player,{x:band.x,y:310});g.interact();assert.equal(g.dialogue.speaker,band.name);g.closeDialogue();tick(g,4);assert.ok(band.bubble);assert.ok(g.speakers().filter(n=>n.bubble?.until>g.elapsed).length<=1);
+ const band=g.guests[2];Object.assign(g.player,{x:470,y:270});g.interact();assert.equal(g.dialogue.speaker,band.name);g.closeDialogue();tick(g,4);assert.ok(band.bubble);assert.ok(g.speakers().filter(n=>n.bubble?.until>g.elapsed).length<=1);
 });
 test('Nikita stays cheerful, reacts to Albert, and never joins either curtain activity',()=>{
  const g=active(),n=g.person('nikita');assert.ok(n.cheerful);Object.assign(g.player,{x:n.x+15,y:n.y});g.interact();assert.ok(n.cheerUntil>g.elapsed);assert.match(g.dialogue.text,/вечер|радость|Улыбка|Жизнь/);g.closeDialogue();g.beginPair();assert.equal(g.person('anfisa').state,'following_pair');assert.notEqual(n.state,'following_pair');assert.equal(g.spawnEvent('comfort','nikita'),false);
@@ -222,4 +222,15 @@ test('Nikita stays cheerful, reacts to Albert, and never joins either curtain ac
 test('Albert visibly finishes approaching the curtain before the pair disappears',()=>{
  const g=active();g.beginPair();Object.assign(g.player,{x:265,y:650});Object.assign(g.person('anfisa'),{x:220,y:735});g.updatePair();assert.equal(g.minigame,null);assert.ok(g.player.visible);
  tick(g,1);assert.ok(g.minigame);assert.ok(distance(g.player,WORLD.curtain)<38);assert.equal(g.person('anfisa').visible,false);
+});
+
+test('busy curtain refuses the pair, displays a message and keeps both visible',()=>{
+ const g=active();g.spawnEvent('comfort','loik');g.beginEscort(g.events[0]);Object.assign(g.npc,WORLD.curtain);g.roomQueue[0].activated=true;g.updateRoom();g.roomOccupant.returnAt=999;
+ g.beginPair();Object.assign(g.player,WORLD.curtain);Object.assign(g.person('anfisa'),{x:220,y:747});tick(g,.1);
+ assert.equal(g.minigame,null);assert.ok(g.player.visible&&g.person('anfisa').visible);assert.match(g.toast.text,/Там сейчас занято/);assert.match(g.person('anfisa').bubble.text,/Там сейчас занято/);
+ g.interact();assert.match(g.toast.text,/Там сейчас занято/);tick(g,15);assert.equal(g.minigame,null);assert.equal(g.stats.pencilWins,0);assert.ok(g.player.visible&&g.person('anfisa').visible);
+});
+test('all four band guests occupy the corner sofa and have a reachable approach',()=>{
+ const g=active();assert.equal(g.guests.length,4);
+ for(const n of g.guests){assert.ok(n.x>=130&&n.x<=474&&n.y<=363);assert.ok(canStand(n.approach.x,n.approach.y),n.name);assert.ok(findPath(WORLD.spawn,n.approach).length,n.name);}
 });

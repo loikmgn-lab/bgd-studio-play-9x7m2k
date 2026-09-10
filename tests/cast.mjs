@@ -18,7 +18,7 @@ export async function castQA(page,errors){
  await page.waitForFunction(()=>!!window.__bgd.game.person('anfisa').bubble);await page.screenshot({path:'artifacts/v08-approach.png'});
  await page.keyboard.press('KeyE');await page.waitForFunction(()=>window.__bgd.game.dialogue?.speaker==='Анфиса');await page.keyboard.press('KeyE');assert.equal(await page.evaluate(()=>window.__bgd.game.person('anfisa').state),'following_pair');
  // Walk along a reachable route using game inputs; follower routes independently.
- await page.evaluate(async()=>{const {game:g}=window.__bgd,{findPath}=await import('./core.js?v=0.8.0');const path=findPath(g.player,{x:195,y:747},16);for(const p of path){for(let i=0;i<800&&Math.hypot(g.player.x-p.x,g.player.y-p.y)>4&&!g.minigame;i++){const dx=p.x-g.player.x,dy=p.y-g.player.y,d=Math.hypot(dx,dy);g.update(.025,{x:dx/d,y:dy/d});}}for(let i=0;i<800&&!g.minigame;i++)g.update(.025);});
+ await page.evaluate(async()=>{const {game:g}=window.__bgd,{findPath}=await import('./core.js?v=0.8.1');const path=findPath(g.player,{x:195,y:747},16);for(const p of path){for(let i=0;i<800&&Math.hypot(g.player.x-p.x,g.player.y-p.y)>4&&!g.minigame;i++){const dx=p.x-g.player.x,dy=p.y-g.player.y,d=Math.hypot(dx,dy);g.update(.025,{x:dx/d,y:dy/d});}}for(let i=0;i<800&&!g.minigame;i++)g.update(.025);});
  await page.waitForFunction(()=>!!window.__bgd.game.minigame);await page.waitForTimeout(120);assert.ok(await page.locator('#pencil-screen').isVisible());
  assert.ok(await page.evaluate(()=>{const g=window.__bgd.game;return !g.player.visible&&!g.person('anfisa').visible;}));
  const elapsed=await page.evaluate(()=>window.__bgd.game.elapsed);await page.waitForTimeout(150);assert.equal(await page.evaluate(()=>window.__bgd.game.elapsed),elapsed);
@@ -28,7 +28,7 @@ export async function castQA(page,errors){
  await page.keyboard.press('Escape');const time=await page.evaluate(()=>window.__bgd.game.minigame.time);await page.waitForTimeout(130);assert.equal(await page.evaluate(()=>window.__bgd.game.minigame.time),time);assert.ok(await page.locator('#pause-screen').isVisible());await page.click('#resume');
  for(let i=0;i<3;i++){
   await page.waitForFunction(()=>window.__bgd.game.minigame&&!window.__bgd.game.minigame.drop);
-  await page.evaluate(async()=>{const g=window.__bgd.game,m=g.minigame,{pencilTip}=await import('./minigame.js?v=0.8.0');m.anchor+=m.target-pencilTip(m).x;});
+  await page.evaluate(async()=>{const g=window.__bgd.game,m=g.minigame,{pencilTip}=await import('./minigame.js?v=0.8.1');m.anchor+=m.target-pencilTip(m).x;});
   await page.keyboard.press('KeyE');await page.waitForTimeout(1150);
  }
  await page.waitForFunction(()=>!window.__bgd.game.minigame);assert.equal(await page.evaluate(()=>window.__bgd.game.stats.pencilWins),1);assert.ok(await page.evaluate(()=>{const g=window.__bgd.game;return g.player.visible&&g.person('anfisa').visible&&g.person('anfisa').dizzyUntil>g.elapsed;}));await page.screenshot({path:'artifacts/v08-happy-return.png'});

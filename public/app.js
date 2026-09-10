@@ -1,11 +1,11 @@
 // Public access is paused until the owner explicitly reopens the game.
-if(!new URLSearchParams(location.search).has('preview')){location.replace('./');await new Promise(()=>{});}
-import {drawPencilGame} from './minigame.js?v=0.8.0';
-import {floatingJoystick} from './controls.js?v=0.8.0';
-import {Game} from './core.js?v=0.8.0';
-import {SETTINGS,CHARACTERS} from './content.js?v=0.8.0';
-import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js?v=0.8.0';
-import {Sound} from './audio.js?v=0.8.0';
+if(!['127.0.0.1','localhost','[::1]'].includes(location.hostname)){location.replace('./');await new Promise(()=>{});}
+import {drawPencilGame} from './minigame.js?v=0.8.1';
+import {floatingJoystick} from './controls.js?v=0.8.1';
+import {Game} from './core.js?v=0.8.1';
+import {SETTINGS,CHARACTERS} from './content.js?v=0.8.1';
+import {Renderer,loadImage,keyedAtlas,drawFrame} from './renderer.js?v=0.8.1';
+import {Sound} from './audio.js?v=0.8.1';
 const $=id=>document.getElementById(id),game=new Game(),sound=new Sound(),keys=new Set();
 let joystickController,miniAxis=0,miniActive=false;
 let renderer,atlas,last=0,lastUi=0,shownMode='',dialogueRef=null,stick={x:0,y:0};
@@ -98,9 +98,9 @@ function frame(t){const dt=last?Math.min((t-last)/1000,.05):0;last=t;
   if(t-lastUi>70){updateUI();lastUi=t;}requestAnimationFrame(frame);
 }
 try {
-  const [background,characters,crew,lounge,friends,nikitaDrink,davidDrink,newcomers,band,dance,nikitaCheer]=await Promise.all([loadImage('./assets/studio.webp'),loadImage('./assets/characters-key.webp'),loadImage('./assets/crew-key.webp'),loadImage('./assets/lounge-key.webp'),loadImage('./assets/friends-realistic-key.webp'),loadImage('./assets/nikita-drink-key.webp'),loadImage('./assets/david-drink-key.webp'),loadImage('./assets/newcomers-key.webp'),loadImage('./assets/metallica-key.webp'),loadImage('./assets/tema-break-key.webp'),loadImage('./assets/nikita-cheer-key.webp')]);
+  const [background,characters,crew,friends,nikitaDrink,davidDrink,newcomers,band,dance,nikitaCheer]=await Promise.all([loadImage('./assets/studio.webp'),loadImage('./assets/characters-key.webp'),loadImage('./assets/crew-key.webp'),loadImage('./assets/friends-realistic-key.webp'),loadImage('./assets/nikita-drink-key.webp'),loadImage('./assets/david-drink-key.webp'),loadImage('./assets/newcomers-key.webp'),loadImage('./assets/metallica-drink-key.webp'),loadImage('./assets/tema-break-key.webp'),loadImage('./assets/nikita-cheer-key.webp')]);
   atlas=keyedAtlas(characters);renderer=new Renderer($('world'),background,atlas);renderer.addCrew(keyedAtlas(crew));new ResizeObserver(()=>renderer.resize()).observe($('world'));renderer.resize();portrait($('portrait'),0);
-  renderer.addLounge(keyedAtlas(lounge));renderer.addFriends(keyedAtlas(friends,'magenta'));renderer.addDrink('nikita',keyedAtlas(nikitaDrink,'magenta'));renderer.addDrink('david',keyedAtlas(davidDrink,'magenta'));
+  renderer.addFriends(keyedAtlas(friends,'magenta'));renderer.addDrink('nikita',keyedAtlas(nikitaDrink,'magenta'));renderer.addDrink('david',keyedAtlas(davidDrink,'magenta'));
   renderer.addCheer(keyedAtlas(nikitaCheer,'magenta'));renderer.addNewcomers(keyedAtlas(newcomers,'magenta'));renderer.addBand(keyedAtlas(band,'magenta'));renderer.addDance(keyedAtlas(dance,'magenta'));
   $('start').disabled=false;$('start').querySelector('span').textContent='НАЧАТЬ СМЕНУ';requestAnimationFrame(frame);
   // Opt-in diagnostics only. Normal players cannot accidentally teleport or shorten a shift.

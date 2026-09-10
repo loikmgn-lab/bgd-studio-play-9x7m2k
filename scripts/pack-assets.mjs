@@ -4,7 +4,7 @@ import {stat,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 const require=createRequire(import.meta.url);
 const sharp=require(process.env.SHARP_PATH||'/Users/yanafidoeva/hr-platform/node_modules/sharp');
-const names=['studio','characters-key','crew-key','lounge-key','friends-realistic-key','nikita-drink-key','david-drink-key','newcomers-key','metallica-key','tema-break-key','nikita-cheer-key'];
+const names=['studio','characters-key','crew-key','friends-realistic-key','nikita-drink-key','david-drink-key','newcomers-key','metallica-drink-key','tema-break-key','nikita-cheer-key'];
 const hash=buffer=>createHash('sha256').update(buffer).digest('hex');
 const report=[];
 for(const name of names){

@@ -9,6 +9,9 @@ http.createServer(async (req, res) => {
     let name = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
     if (name.startsWith('/bgd/')) name = name.slice(4);
     if (name === '/bgd') { res.writeHead(302, { Location: '/bgd/' }); return res.end(); }
+    if(name === '/__preview' && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)){
+      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(await readFile(new URL('./preview/index.html',import.meta.url)));
+    }
     const target = path.resolve(root, '.' + name);
     if (target !== root && !target.startsWith(root + path.sep)) { res.writeHead(403); return res.end(); }
     const file = (await stat(target)).isDirectory() ? path.join(target, 'index.html') : target;
